@@ -2,7 +2,11 @@
 
 A browser version of the 2025 student-built Moral Compass generator (`Customized compass generator.py`, CadQuery) for the WRIT 340 Moral Compass project and the Baum Family Maker Space. Type a name and four values; get a print-ready MMU bed for PrusaSlicer. No Python install, about 0.4 s per compass instead of 15 s to 2 min.
 
-## Run it
+## Live
+
+https://shopnerd.github.io/compass-studio/ (GitHub Pages from `main`; pushing to `main` updates it in about a minute).
+
+## Run it locally
 
 ```bash
 cd "H:/My Drive/Baum Family Maker Space/WebDev_4_BFMS/compass-studio"
