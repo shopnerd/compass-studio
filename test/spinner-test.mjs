@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
 import { createKit, meshToSTL } from '../core.js';
-import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT } from '../spinner.js';
+import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT, BUTTON } from '../spinner.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fb = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -16,7 +16,7 @@ let fails = 0; const fail = (m) => { fails++; console.log('  FAIL', m); };
 function run(S, label) {
   const t0 = performance.now(); const sp = buildSpinner(K, S); const ms = performance.now() - t0;
   const P = sp.parts;
-  for (const [k, m] of Object.entries(P)) if (!K.valid(m) || m.isEmpty()) fail(`${label}: ${k} invalid/empty`);
+  for (const [k, m] of Object.entries(P)) if (m && (!K.valid(m) || m.isEmpty())) fail(`${label}: ${k} invalid/empty`);
   // assembled: tray, lid, inlays must not overlap; caps placed on the bearing must not touch tray or lid
   const { zTopCap, zB0 } = sp.assembly;
   const capTop = P.capTop.translate([0, 0, zTopCap]), capBot = P.capBot.translate([0, 0, sp.assembly.zBotCap]);
@@ -34,6 +34,26 @@ function run(S, label) {
     const shank = K.Manifold.cylinder(INSERT.screwLen - 1, 0.95, 0.95, 24).translate([0, 0, sp.assembly.zTopCap + sp.assembly.capT - J.cb - INSERT.screwLen]);
     if (shank.intersect(capTop).volume() > 0.01 || shank.intersect(capBot).volume() > 0.01) fail(`${label}: cap screw path is blocked`);
     for (const [k, m] of [['tray', P.tray], ['lid', P.lid]]) for (const [c, cm] of [['top cap', capTop], ['bottom cap', capBot]]) if (m.intersect(cm).volume() > 0.01) fail(`${label}: ${c} touches the ${k}`);
+  }
+  { // press-in button: one piece, prints flat, only its ribs grip the cap, clears the screw head, sits proud of the face
+    const A = sp.assembly, btn = P.button.translate([0, 0, A.zButton]), bb = P.button.boundingBox();
+    const grip = btn.intersect(capTop).volume(), headTop = A.zTopCap + A.capT - A.capJ.cb;
+    if (P.button.decompose().length !== 1) fail(`${label}: button is not one piece`);
+    if (Math.abs(bb.min[2]) > 1e-6) fail(`${label}: button does not sit on the bed`);
+    if (grip < 0.02 || grip > 0.6) fail(`${label}: button rib grip ${grip.toFixed(3)} mm³ (expected only the crush ribs)`);
+    if (A.zButton - headTop < 0.05) fail(`${label}: button plug hits the screw head`);
+    const proud = A.zButton + bb.max[2] - (A.zTopCap + A.capT);
+    if (proud < 0.6 || proud > 1.5) fail(`${label}: button stands ${proud.toFixed(2)} mm proud`);
+    if (btn.intersect(P.capPtr.translate([0, 0, A.zTopCap])).volume() > 0.001) fail(`${label}: button covers the pointer`);
+  }
+  if (P.trayWhite) { // bottom text: a real inlay, flush with the bed side, no overlap with the tray, clear of the grille and the well
+    const tw = P.trayWhite, bb = tw.boundingBox();
+    if (tw.volume() < 5) fail(`${label}: bottom text is nearly empty`);
+    if (Math.abs(bb.min[2]) > 1e-6 || bb.max[2] > sp.S.floor - 0.4) fail(`${label}: bottom text is not a flush inlay (z ${bb.min[2]}–${bb.max[2]})`);
+    if (tw.intersect(P.tray).volume() > 0.001) fail(`${label}: bottom text overlaps the tray`);
+    const spk = sp.L.parts.find(p => p.key === 'speaker');
+    if (spk) { const a = spk.angle * Math.PI / 180, c = K.Manifold.cylinder(2, spk.d / 2 - 2.5, spk.d / 2 - 2.5, 48).translate([spk.r * Math.sin(a), spk.r * Math.cos(a), -0.5]); if (tw.intersect(c).volume() > 0.001) fail(`${label}: bottom text runs over the speaker grille`); }
+    if (tw.intersect(K.Manifold.cylinder(2, sp.S.wellR + 0.5, sp.S.wellR + 0.5, 64).translate([0, 0, -0.5])).volume() > 0.001) fail(`${label}: bottom text runs into the finger well`);
   }
   const L = sp.L, bal = L.balance;
   { // heat-set inserts: wall round the knurl, screw reaches into the insert but not past it, insert hole is really there
@@ -62,6 +82,8 @@ function run(S, label) {
 const sp = run(SPIN_DEFAULTS, 'default');
 run({ ...SPIN_DEFAULTS, values: ['Accountability', 'Perseverance', 'Compassion', 'Curiosity'] }, 'long values');
 run({ ...SPIN_DEFAULTS, order: 'values' }, 'values together');
+run({ ...SPIN_DEFAULTS, bottom: ['Maya Rodriguez', 'WRIT 340 · Fall 2026'] }, 'bottom text');
+run({ ...SPIN_DEFAULTS, speaker: 'none', bottom: ['A much longer line of text that cannot fit', ''] }, 'bottom text, too long, no speaker');
 run({ ...SPIN_DEFAULTS, disc: '90', leds: '16', battery: '502025', speaker: '15' }, 'Ø90, 16 LEDs, 220 mAh, 15 mm');
 run({ ...SPIN_DEFAULTS, disc: '86', leds: '8', battery: '302025', speaker: 'none' }, 'Ø86, 8 LEDs, 120 mAh, no sound');
 if (out) {
@@ -69,7 +91,7 @@ if (out) {
   const { zTopCap, zB0 } = sp.assembly;
   w('sp-tray.stl', sp.parts.tray); w('sp-lid.stl', sp.parts.lid); w('sp-white.stl', sp.parts.white); w('sp-gold.stl', sp.parts.gold);
   w('sp-captop.stl', sp.parts.capTop.translate([0, 0, zTopCap])); w('sp-capptr.stl', sp.parts.capPtr.translate([0, 0, zTopCap]));
-  w('sp-capbot.stl', sp.parts.capBot); w('sp-dome.stl', sp.parts.dome);
+  w('sp-capbot.stl', sp.parts.capBot); w('sp-dome.stl', sp.parts.dome); w('sp-button.stl', sp.parts.button);
   console.log('wrote STLs to', out);
 }
 console.log(fails ? `${fails} FAILURES` : 'all spinner checks passed');

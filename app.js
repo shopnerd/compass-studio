@@ -231,7 +231,7 @@ $('exClass').onclick = (e) => { const r = parseRoster(); if (!r.length) return s
 for (const g of ['body', 'white', 'gold', 'caps']) { const sel = $('sp-slot-' + g); for (let i = 1; i <= 5; i++) sel.add(new Option(`Slot ${i}`, i)); sel.value = { body: 1, white: 2, gold: 3, caps: 1 }[g]; }
 function spinParams() {
   return { name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), extras: [0, 1, 2, 3].map(i => $('x' + i).value || ['Truth', 'Dare', 'Again', 'Choose'][i]),
-    order: $('spOrder').value, printer: $('spPrinter').value, disc: $('spDisc').value, leds: $('spLeds').value, battery: $('spBattery').value, speaker: $('spSpeaker').value, imu: $('spImu').value, slots: Object.fromEntries(['body', 'white', 'gold', 'caps'].map(g => [g, +$('sp-slot-' + g).value])) };
+    bottom: [$('spBottom1').value, $('spBottom2').value], order: $('spOrder').value, printer: $('spPrinter').value, disc: $('spDisc').value, leds: $('spLeds').value, battery: $('spBattery').value, speaker: $('spSpeaker').value, imu: $('spImu').value, slots: Object.fromEntries(['body', 'white', 'gold', 'caps'].map(g => [g, +$('sp-slot-' + g).value])) };
 }
 function setModel(m) {
   model = m;
@@ -268,6 +268,7 @@ function showSpin(res) {
   const M = res.meshes, A = res.info.assembly, ex = mode === 'explode', inside = mode === 'inside', xr = spinXray && !inside && !ex;
   shellSeeThrough = xr;
   addMesh(M.tray, 'body');
+  if (M.trayWhite) addMesh(M.trayWhite, 'white');   // text on the bottom
   if (!inside) {
     addMesh(M.lid, 'body', m => { m.position.z = ex ? 40 : 0; });
     addMesh(M.white, 'white', m => { m.position.z = ex ? 48 : 0; });
@@ -281,6 +282,7 @@ function showSpin(res) {
     const iv = insertModel(ins.len, ins.knurl); iv.position.z = A.zBotCap + A.capT - 1 + 0.5 + J.botPeg - (ex ? 18 : 0); group.add(iv);
     if (!inside) { const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.position.z = A.zTopCap + A.capT - J.cb + (ex ? 76 : 0); group.add(sc); }
   }
+  if (M.button && !inside) addMesh(M.button, 'white', m => { m.position.z = A.zButton + (ex ? 84 : 0); });   // press-in button over the cap screw
   addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
   const bear = bearingMesh(22, 8, 7); bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
   if (inside || ex || xr) {   // the electronics, drawn as the real parts
@@ -340,11 +342,11 @@ function drawSpinBed() {
   const css = getComputedStyle(document.documentElement), P = (px, py) => [ox + px * k, oy + (bh - py) * k];
   x.fillStyle = css.getPropertyValue('--panel').trim(); x.strokeStyle = css.getPropertyValue('--muted').trim(); x.fillRect(ox, oy, bw * k, bh * k); x.strokeRect(ox, oy, bw * k, bh * k);
   const t = b.tower; x.globalAlpha = 0.35; x.fillStyle = css.getPropertyValue('--muted').trim(); x.fillRect(...P(t[0], t[1] + t[3]), t[2] * k, t[3] * k); x.globalAlpha = 1;
-  const col = { tray: FILAMENTS.body, lid: FILAMENTS.gold, capTop: '#7d1a20', capBot: '#7d1a20', dome: FILAMENTS.white };
-  const name = { tray: 'tray', lid: 'lid (face down)', capTop: 'top cap', capBot: 'cap', dome: 'dome' };
+  const col = { tray: FILAMENTS.body, lid: FILAMENTS.gold, capTop: '#7d1a20', capBot: '#7d1a20', dome: FILAMENTS.white, button: FILAMENTS.white };
+  const name = { tray: 'tray', lid: 'lid (face down)', capTop: 'top cap', capBot: 'cap', dome: 'dome', button: '' };
   for (const it of b.items) {
     const [X, Y] = P(it.x, it.y); x.fillStyle = col[it.part]; x.beginPath(); x.arc(X, Y, it.r * k, 0, 7); x.fill();
-    x.fillStyle = it.part === 'dome' || it.part === 'lid' ? '#222' : '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `600 ${Math.max(10, 11 * k)}px system-ui`;
+    x.fillStyle = it.part === 'dome' || it.part === 'button' || it.part === 'lid' ? '#222' : '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `600 ${Math.max(10, 11 * k)}px system-ui`;
     x.fillText(it.r > 20 ? `${name[it.part]} ${it.kit + 1}` : String(it.kit + 1), X, Y);
   }
   x.textAlign = 'start'; x.textBaseline = 'alphabetic'; x.fillStyle = css.getPropertyValue('--muted').trim(); x.font = '12px system-ui';

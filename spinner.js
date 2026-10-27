@@ -31,6 +31,9 @@ export function capJoint(b = { w: 7 }, capT = 3) {
   const insertTop = -0.5 - topPeg - gap;                       // bottom peg's tip, top-cap coordinates
   return { topPeg, gap, botPeg, cb, cs, engage: insertTop - tip, spare: tip - (insertTop - INSERT.len), wall: (7.95 - INSERT.knurl) / 2 };
 }
+// The button that covers the cap screw: plug in the counterbore (3 crush ribs, 0.12 mm interference), a 45° collar in
+// the cone at the cap's face, a dome 1 mm proud. The plug stops 0.1 mm above the screw head.
+export const BUTTON = { plugR: 2.2, ribR: 2.32, plug: 1.1, collar: 0.8, domeR: 3.0, domeH: 1.0 };
 export const INSERT = { name: 'M2 × 4 brass heat-set insert', hole: 3.2, len: 4.0, knurl: 3.6, wall: 1.6, clear: 2.4, head: 4.0, screwLen: 6, chamfer: 0.4,
   get bossR() { return this.hole / 2 + this.wall; }, get depth() { return this.len + 1; },
 };
@@ -59,6 +62,7 @@ export const CHOICES = {
 export const SPIN_DEFAULTS = {
   values: ['Integrity', 'Honor', 'Excellence', 'Service'],
   extras: ['Truth', 'Dare', 'Again', 'Choose'],
+  bottom: ['', ''],                // optional text on the bottom: line 1, line 2 (white inlay, printed on the bed side)
   order: 'mix',                    // mix: value, game, value, game…   values: the four values together
   name: 'Name Example',
   battery: '302025', speaker: '20', leds: '12', disc: '86', imu: 'dsox',
@@ -219,7 +223,7 @@ export function spinLayout(S, quick = false, coarse = false) {
 
 // ---------------------------------------------------------------- bed: whole kits (tray + lid + two caps + dome) per bed
 const PR = { mk4s: [250, 210, 60, 20, 'Prusa MK4S + MMU3'], core1: [250, 220, 60, 20, 'Prusa Core One + MMU3'], xl: [360, 360, 45, 15, 'Prusa XL, 5 heads'] };
-export function kitCircles(S) { const cr = S.wellR - 0.6, R = resolveChoices(S).R; return [['tray', R], ['lid', R], ['capTop', cr], ['capBot', cr], ['dome', cr - 1]]; }
+export function kitCircles(S) { const cr = S.wellR - 0.6, R = resolveChoices(S).R; return [['tray', R], ['lid', R], ['capTop', cr], ['capBot', cr], ['dome', cr - 1], ['button', BUTTON.domeR + 0.4]]; }
 export function packKits(S) {
   const [bw, bh, tw, th, label] = PR[S.printer] || PR.mk4s, g = S.gap, m = S.margin;
   const tower = [bw - m - tw, bh - m - th, tw, th];
@@ -343,6 +347,11 @@ export function buildSpinner(K, S0) {
   capTop = capTop.subtract(cyl(capT + CAPJ.topPeg + 1, INSERT.clear / 2, -CAPJ.topPeg - 0.6, 32));                     // screw clearance
   capTop = capTop.subtract(cyl(CAPJ.cb + 0.01, INSERT.head / 2 + 0.2, capT - CAPJ.cb, 40));                           // counterbore
   capTop = capTop.subtract(Manifold.cylinder(CAPJ.cs + 0.01, INSERT.clear / 2, INSERT.head / 2 + 0.1, 32).translate([0, 0, capT - CAPJ.cb - CAPJ.cs]));   // 90° countersink
+  // seat for the press-in button: 45° cone at the face (Ø6.1 → Ø4.5, 0.8 deep) over the counterbore, and a fingernail
+  // notch opposite the pointer for prying it out to reach the screw
+  const BTN = BUTTON;
+  capTop = capTop.subtract(Manifold.cylinder(BTN.collar + 0.01, BTN.plugR + 0.05, BTN.domeR + 0.05, 48).translate([0, 0, capT - BTN.collar]));
+  capTop = capTop.subtract(Manifold.cube([0.9, BTN.domeR + 0.5 - BTN.plugR, 0.6]).translate([-0.45, -(BTN.domeR + 0.5), capT - 0.6]));
   capTop = capTop.subtract(cyl(1.7, 1.66, -0.01, 24, ...at(hall.r, 0)));                                           // magnet pocket over the hall sensor
   const ptr = mk([[at(capR - 0.6, 0), at(capR - 7, -3.2), at(capR - 7, 3.2)]], 'NonZero');
   const capPtr = ext(ptr, 0.6, capT - 0.6);
@@ -353,20 +362,50 @@ export function buildSpinner(K, S0) {
     capBot = capBot.subtract(cyl(INSERT.depth + 0.01, INSERT.hole / 2, top - INSERT.depth, 32));
     capBot = capBot.subtract(Manifold.cylinder(INSERT.chamfer + 0.01, INSERT.hole / 2, INSERT.hole / 2 + INSERT.chamfer, 32).translate([0, 0, top - INSERT.chamfer])); }
   const dome = Manifold.sphere(capR * 1.3, 128).translate([0, 0, 2.4 - capR * 1.3]).intersect(cyl(2.4, capR - 1, 0, 96));
+  // press-in button over the cap screw, as printed (plug down, dome up, no supports): ribbed plug, 45° collar, low dome
+  const btn = (() => {
+    const B = BUTTON, zc = B.plug, zd = B.plug + B.collar;
+    let m = cyl(zc + 0.01, B.plugR - 0.12, 0, 40);
+    for (let i = 0; i < 3; i++) m = m.add(Manifold.cube([0.5, B.ribR - (B.plugR - 0.3), zc - 0.25]).translate([-0.25, B.plugR - 0.3, 0.25]).rotate([0, 0, i * 120]));   // crush ribs
+    m = m.add(Manifold.cylinder(B.collar, B.plugR, B.domeR, 48).translate([0, 0, zc]));
+    const rs = (B.domeR ** 2 + B.domeH ** 2) / (2 * B.domeH);   // sphere through the rim and the apex
+    m = m.add(Manifold.sphere(rs, 96).translate([0, 0, zd + B.domeH - rs]).intersect(cyl(B.domeH, B.domeR, zd, 64)));
+    return m;
+  })();
+
+  // ---- text on the bottom: white letters inlaid 0.6 mm into the tray's floor from the bed side (the first three layers).
+  // Built as seen from below, then mirrored into model space. The lines sit on opposite sides with the speaker grille
+  // in the gap between them; each reads upright when you turn the disc so that line is on top.
+  let trayWhite = null;
+  const lines = (S.bottom || []).map(t => (t || '').trim()).slice(0, 2);
+  if (lines.some(Boolean)) {
+    const spkB = L.parts.find(p => p.key === 'speaker'), g = spkB ? 90 + spkB.angle : 0;   // grille, in the from-below view
+    const rB = (wellR + R) / 2 - 0.5, sizeB = Math.min(5.2, (R - wellR) / 4.6), depthB = 0.6;
+    const t1 = arcText(lines[0], rB - sizeB / 2, g + 90, sizeB, 140, 2.6, 0.4), t2 = arcText(lines[1], rB + sizeB / 2, g - 90, sizeB, 140, 2.6, 0.4, true);
+    [[t1, lines[0]], [t2, lines[1]]].forEach(([t, txt], i) => { if (!txt) return; if (!t.fits) warn.push(`Bottom line ${i + 1} is too long; shorten it`); else if (t.size < sizeB - 0.05) warn.push(`Bottom line ${i + 1} shrinks to ${t.size.toFixed(1)} mm to fit`); });
+    let cs = unionCS([t1.cs, t2.cs]);
+    if (cs) {
+      cs = cs.mirror([1, 0]);
+      if (spk) { const c = at(spk.r, spk.angle); cs = cs.subtract(CrossSection.circle(spk.d / 2 - 1.5, 64).translate(c)); }   // never over the grille
+      cs = cs.subtract(disk(wellR + 1.2, 96));
+      if (!cs.isEmpty()) { trayWhite = ext(cs, depthB, 0); tray = tray.subtract(trayWhite); }
+    }
+  }
 
   const ok = (m) => m && !m.isEmpty();
   const groups = { body: tray, lid: lidM, white: whiteOut, gold };
   for (const k of Object.keys(groups)) if (!ok(groups[k])) delete groups[k];
   return {
     S, L, warn,
-    parts: { tray, lid: lidM, white: whiteOut, gold, capTop, capPtr, capBot, dome },
-    assembly: { zLid, zTopCap, zB0, capT, zBotCap: zB0 - 0.5 - (capT - 1), capJ: CAPJ },
+    parts: { tray, trayWhite, lid: lidM, white: whiteOut, gold, capTop, capPtr, capBot, dome, button: btn },
+    assembly: { zLid, zTopCap, zB0, capT, zBotCap: zB0 - 0.5 - (capT - 1), capJ: CAPJ, zButton: zTopCap + capT - BUTTON.collar - BUTTON.plug },
     print: {   // print poses: tray as is; lid face down (smooth bed-side face); top cap face down; bottom cap + dome flat
-      tray: { body: tray },
+      tray: trayWhite ? { body: tray, white: trayWhite } : { body: tray },
       lid: { body: lidM.rotate([180, 0, 0]).translate([0, 0, H]), white: whiteOut.rotate([180, 0, 0]).translate([0, 0, H]), gold: gold.rotate([180, 0, 0]).translate([0, 0, H]) },
       capTop: { body: capTop.rotate([180, 0, 0]).translate([0, 0, capT]), white: capPtr.rotate([180, 0, 0]).translate([0, 0, capT]) },
       capBot: { body: capBot },
-      dome: { body: dome },
+      dome: { white: dome },
+      button: { white: btn },
     },
   };
 }
