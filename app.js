@@ -1,0 +1,368 @@
+// app.js — UI + three.js viewer. The worker does all geometry.
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/OrbitControls.js';
+import { DEFAULTS, FILAMENTS, compassPrint, NEEDLE_PRINT } from './core.js';
+import { mountPlay } from './play.js';
+import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
+import { mountVoice } from './voice-ui.js';
+import { spinBom, bomCSV } from './bom.js';
+
+const $ = (id) => document.getElementById(id);
+const worker = new Worker('./worker.js', { type: 'module' });
+let seq = 0; const pending = new Map();
+worker.onmessage = (e) => {
+  const m = e.data, p = pending.get(m.id); if (!p) return;
+  if (m.type === 'progress') return setStatus(m.text, true);
+  pending.delete(m.id);
+  m.type === 'error' ? p.reject(new Error(m.message)) : p.resolve(m);
+};
+const call = (msg) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); worker.postMessage({ id, ...msg }); });
+function setStatus(t, busy = false) { const s = $('status'); s.textContent = t; s.classList.toggle('busy', busy); }
+
+// ---------------------------------------------------------------- settings
+const SLOT_GROUPS = ['body', 'white', 'gold', 'needle'];
+for (const g of SLOT_GROUPS) { const s = $('slot-' + g); for (let i = 1; i <= 5; i++) s.add(new Option(`Slot ${i}`, i)); s.value = DEFAULTS.slots[g]; }
+function params() {
+  return {
+    name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), autoArrange: $('autoArrange').checked, caps: $('caps').checked,
+    back: $('back').value, backing: $('backing').checked, loop: $('loop').checked, scale: +$('scale').value,
+    centre: $('centre').value, nfc: $('nfc').value, boreR: +$('boreR').value || 6.51, pinD: +$('pinD').value || 5.2,
+    printer: $('printer').value, gap: +$('gap').value,
+    slots: Object.fromEntries(SLOT_GROUPS.map(g => [g, +$('slot-' + g).value])),
+  };
+}
+try { const saved = JSON.parse(localStorage.getItem('compass-studio') || 'null'); if (saved) restore(saved); } catch (_) {}
+function restore(p) {
+  const set = (id, v) => { if (v !== undefined && $(id)) { if ($(id).type === 'checkbox') $(id).checked = v; else $(id).value = v; } };
+  set('name', p.name); (p.values || []).forEach((v, i) => set('v' + i, v));
+  for (const k of ['autoArrange', 'caps', 'back', 'backing', 'loop', 'scale', 'centre', 'nfc', 'boreR', 'pinD', 'printer', 'gap']) set(k, p[k]);
+  if (p.slots) for (const g of SLOT_GROUPS) set('slot-' + g, p.slots[g]);
+}
+
+// ---------------------------------------------------------------- viewer
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 2000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(60, -80, 160); scene.add(sun);
+const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(-80, 90, -60); scene.add(rim);
+const group = new THREE.Group(); scene.add(group);
+const mats = {};
+function mat(key) {
+  const col = { body: FILAMENTS.body, white: FILAMENTS.white, gold: FILAMENTS.gold, needle: FILAMENTS.needle, bearing: '#a9adb1', light: '#ffe9a8' }[key];
+  return mats[key] ||= new THREE.MeshStandardMaterial({ color: col, roughness: key === 'bearing' ? 0.25 : 0.55, metalness: key === 'gold' ? 0.35 : key === 'bearing' ? 0.9 : 0.02 });
+}
+function geo(mesh) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(mesh.v, 3)); g.setIndex(new THREE.BufferAttribute(mesh.t, 1));
+  const ng = g.toNonIndexed(); ng.computeVertexNormals(); g.dispose(); return ng;
+}
+let last = null, mode = '3d', model = 'compass', spinLast = null;
+function showCompass(res) {
+  for (const c of [...group.children]) { group.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
+  const { one, d } = res, ex = mode === 'explode';
+  for (const [k, mesh] of Object.entries(one.meshes)) {
+    const m = new THREE.Mesh(geo(mesh), mat(k));
+    if (ex && k !== 'body') m.position.z = k === 'gold' ? 14 : 22;
+    group.add(m);
+  }
+  if (one.extras.length) {
+    const e = one.extras[0], t = e.kind === 'light' ? 4.2 : 2;
+    // installed: flipped over, ledge on the bearing's inner race at the dish floor
+    const n = new THREE.Mesh(geo(e.meshes.needle), mat('needle'));
+    n.rotation.x = Math.PI; n.position.z = d.dishZ + t + 0.6 + (ex ? 34 : 0.05);
+    group.add(n);
+    const bearing = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6.5, 4, 48, 1, true), mat('bearing'));
+    bearing.rotation.x = Math.PI / 2; bearing.position.z = d.dishZ - 2 + (ex ? 8 : 0); if (ex) group.add(bearing);
+  }
+  frame();
+}
+function frame() {
+  const R = model === 'spin' ? (spinLast ? spinLast.info.R : 41) : 37.5 * +$('scale').value;
+  controls.target.set(0, 3, 3);
+  if (mode === 'top') camera.position.set(0, 0.01, R * 4.4);
+  else if (mode === 'back') camera.position.set(0, 0.01, -R * 4.4);
+  else if (mode === 'explode') camera.position.set(R * 2.2, -R * 3.2, R * 2.6);
+  else camera.position.set(R * 1.6, -R * 2.6, R * 2.7);
+  camera.up.set(0, 0, 1); if (mode === 'top' || mode === 'back') camera.up.set(0, 1, 0);
+  controls.update(); draw();
+}
+function size() {
+  const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); drawBed(); draw();
+}
+let raf = 0; function draw() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderer.render(scene, camera); }); }
+controls.addEventListener('change', draw);
+(function loop() { controls.update(); requestAnimationFrame(loop); })();
+new ResizeObserver(size).observe(view);
+
+// ---------------------------------------------------------------- bed drawing
+function drawBed() {
+  if (model === 'spin') return drawSpinBed();
+  const cv = $('bedCanvas'); if (cv.hidden || !last) return;
+  const b = last.bed, dpr = Math.min(2, devicePixelRatio), W = view.clientWidth, H = view.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+  const [bw, bh] = b.bed, k = Math.min((W - 40) / bw, (H - 50) / bh), ox = (W - bw * k) / 2, oy = (H - bh * k) / 2 + 10;
+  const css = getComputedStyle(document.documentElement), ink = css.getPropertyValue('--ink').trim(), muted = css.getPropertyValue('--muted').trim();
+  const P = (px, py) => [ox + px * k, oy + (bh - py) * k];   // bed origin at the front left
+  x.fillStyle = css.getPropertyValue('--panel').trim(); x.strokeStyle = muted; x.lineWidth = 1;
+  x.fillRect(ox, oy, bw * k, bh * k); x.strokeRect(ox, oy, bw * k, bh * k);
+  x.strokeStyle = css.getPropertyValue('--line').trim();
+  for (let gx = 50; gx < bw; gx += 50) { x.beginPath(); x.moveTo(...P(gx, 0)); x.lineTo(...P(gx, bh)); x.stroke(); }
+  for (let gy = 50; gy < bh; gy += 50) { x.beginPath(); x.moveTo(...P(0, gy)); x.lineTo(...P(bw, gy)); x.stroke(); }
+  const t = b.tower; x.fillStyle = muted; x.globalAlpha = 0.35; x.fillRect(...P(t[0], t[1] + t[3]), t[2] * k, t[3] * k); x.globalAlpha = 1;
+  x.fillStyle = ink; x.font = '11px ui-monospace, monospace'; x.fillText('wipe tower', ...P(t[0] + 2, t[1] + t[3] / 2 - 1));
+  const p = { ...DEFAULTS, ...params() }, fp = compassPrint(p);
+  const outline = (circles, cx, cy, ang, fill) => {
+    x.fillStyle = fill; for (const c of circles) { const s = Math.sin(ang), co = Math.cos(ang); const [X, Y] = P(cx + c[0] * co - c[1] * s, cy + c[0] * s + c[1] * co); x.beginPath(); x.arc(X, Y, c[2] * k, 0, 7); x.fill(); }
+  };
+  b.items.forEach((it, i) => {
+    outline(fp, it.x, it.y, it.ang, FILAMENTS.body);
+    const [X, Y] = P(it.x, it.y); x.fillStyle = FILAMENTS.gold; x.beginPath(); x.arc(X, Y, 21 * p.scale * k, 0, 7); x.fill();
+    x.fillStyle = '#fff'; x.font = `600 ${Math.max(11, 14 * k)}px system-ui`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(i + 1), X, Y); x.textAlign = 'start'; x.textBaseline = 'alphabetic';
+  });
+  b.needles.forEach(n => outline(NEEDLE_PRINT, n.x, n.y, n.ang, '#7d1a20'));
+  x.fillStyle = muted; x.font = '12px system-ui';
+  x.fillText(`${b.printer}: ${bw} × ${bh} mm · ${b.n} compasses${b.needles.length ? ` + ${b.needles.length} needles` : ''} · 50 mm grid · front edge at the bottom`, ox, oy + bh * k + 18);
+}
+
+// ---------------------------------------------------------------- rebuild
+let timer = 0, building = false, again = false;
+function schedule() { clearTimeout(timer); timer = setTimeout(rebuild, 160); }
+async function rebuild() {
+  if (model === 'spin') return rebuildSpin();
+  if (building) { again = true; return; }
+  building = true; setStatus('Building…', true);
+  const p = params();
+  try { localStorage.setItem('compass-studio', JSON.stringify(p)); } catch (_) {}
+  try {
+    const res = await call({ type: 'build', params: p });
+    last = res; showCompass(res); render(res, p); drawBed();
+    setStatus(`Built in ${(res.ms / 1000).toFixed(2)} s`);
+  } catch (err) { setStatus('Could not build: ' + err.message); }
+  building = false; if (again) { again = false; rebuild(); }
+}
+function render(res, p) {
+  const { one, bed, swaps, sweep, d } = res;
+  const [n, e, s, w] = one.vals;
+  $('where').textContent = `N ${n || '—'} · E ${e || '—'} · S ${s || '—'} · W ${w || '—'}`;
+  $('warn').innerHTML = ''; for (const t of one.warn) { const li = document.createElement('li'); li.textContent = t; $('warn').append(li); }
+  $('scaleOut').textContent = `Ø${(75 * p.scale).toFixed(1)} mm`; $('gapOut').textContent = `${p.gap} mm`;
+  const g = (v) => (v / 1000 * 1.24).toFixed(1);
+  const total = Object.values(one.volumes).reduce((a, b) => a + b, 0);
+  $('bedStats').innerHTML = `
+    <div class="stat"><b>${bed.n}</b><span>compasses per bed</span></div>
+    <div class="stat"><b>${Math.ceil(30 / Math.max(1, bed.n))}</b><span>beds for 30 students</span></div>
+    <div class="stat"><b>~${swaps.swaps}</b><span>colour changes per bed, the same for 1 or ${bed.n}</span></div>
+    <div class="stat"><b>~${(swaps.minutes / Math.max(1, bed.n)).toFixed(1)} min</b><span>of swapping per compass</span></div>
+    <div class="stat wide"><span>Compasses per bed at other sizes (needles fill the gaps)</span><div class="sweep">${sweep.map(r => `<span class="${Math.abs(r.s - p.scale) < 0.01 ? 'on' : ''}">Ø${r.d}: ${r.n}</span>`).join('')}</div></div>
+    <div class="stat wide"><span>Filament if printed solid: body ${g(one.volumes.body || 0)} g, letters ${g(one.volumes.white || 0)} g, rose ${g(one.volumes.gold || 0)} g (${g(total)} g a compass). Real prints with infill use less.</span></div>`;
+  $('insideInfo').innerHTML = insideInfo(p, one, d);
+  const used = [...new Set(SLOT_GROUPS.filter(k => k !== 'needle' || p.centre !== 'fixed').map(k => p.slots[k]))].length;
+  $('legend').innerHTML = [['body', 'body'], ['white', 'letters, logo, white centre'], ['gold', 'rose'], ...(p.centre !== 'fixed' ? [['needle', p.centre === 'light' ? 'light needle' : 'needle']] : [])]
+    .map(([k, l]) => `<span><i style="background:${FILAMENTS[k]}"></i>${l}: slot ${p.slots[k]}</span>`).join('') + `<span>${used} filaments on the MMU</span>`;
+}
+function insideInfo(p, one, d) {
+  const parts = [];
+  if (p.centre === 'needle') parts.push(`<h4>Spinning needle</h4><ul><li>695ZZ bearing, 5 × 13 × 4 mm. Clamp it into the pocket until flush.</li><li>Clamp the needle's pin into the bearing; the ledge keeps it clear of the outer race.</li><li>Pocket r ${p.boreR.toFixed(2)} and pin Ø${p.pinD.toFixed(2)}: print the fitment test plate first if the filament or printer changed.</li></ul>`);
+  if (p.centre === 'light') parts.push(`<h4>Light needle (persistence of vision)</h4><p>Five LEDs flash in a timed pattern; spinning the needle smears them into rings and shapes, like an LED fidget spinner.</p><ul><li>CR1220 coin cell in the hub (pocket on the pin side)</li><li>5 × 1.8 mm LEDs through the north arm, wires in the groove underneath</li><li>Controller up to 6 × 9 mm in the south arm pocket (an ATtiny10 or CH32V003 board)</li><li>Same 695 bearing and pin as the plain needle. Wiring and firmware are not part of this file.</li></ul>`);
+  if (p.centre === 'fixed') parts.push('<h4>No needle</h4><p>Solid centre, nothing to assemble.</p>');
+  if (p.nfc === 'sticker') parts.push('<h4>NFC sticker</h4><p>Ø10 mm NTAG213 sticker in the 0.4 mm recess on the back, under the loop. Program it with the student\'s page before sticking it down.</p>');
+  if (p.nfc === 'embedded') parts.push(`<h4>NFC sealed inside</h4><p>In PrusaSlicer add a pause at <b>${one.pause} mm</b>, drop a Ø10 × 0.6 mm tag into each pocket, resume. The tag sits under the ring, away from the steel bearing.</p>`);
+  return parts.join('');
+}
+
+// ---------------------------------------------------------------- inputs, views, exports
+document.querySelectorAll('#panel input, #panel select').forEach(el => { if (el.id !== 'roster' && el.id !== 'bomQty') el.addEventListener('input', (e) => { if (!e.target.closest('#voiceBox')) schedule(); }); });
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  mode = b.dataset.view; const bed = mode === 'bed', playing = mode === 'play';
+  $('bedCanvas').hidden = !bed; $('playBox').hidden = !playing; renderer.domElement.hidden = bed || playing;
+  if (playing) return showPlay();
+  if (bed) drawBed(); else if (model === 'spin') { if (spinLast) showSpin(spinLast); } else if (last) showCompass(last);
+}));
+function parseRoster() {
+  return $('roster').value.split(/\r?\n/).map(l => l.split(/\t|,/).map(s => s.trim())).filter(r => r[0]).map(r => ({ name: r[0], values: [r[1] || '', r[2] || '', r[3] || '', r[4] || ''] }));
+}
+function rosterInfo() { const r = parseRoster(), per = last ? last.bed.n : 0; $('rosterInfo').textContent = `${r.length} students${per ? ` → ${Math.ceil(r.length / per)} beds of up to ${per}` : ''}.`; }
+$('roster').addEventListener('input', rosterInfo);
+function save(files) {
+  for (const [name, bytes] of files) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: name.endsWith('.3mf') ? 'model/3mf' : name.endsWith('.zip') ? 'application/zip' : 'model/stl' }));
+    a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+}
+async function exportIt(what, btn, extra = {}) {
+  const btns = document.querySelectorAll('.btn'); btns.forEach(b => b.disabled = true);
+  setStatus('Exporting…', true);
+  try { const res = await call({ type: 'export', what, params: params(), ...extra }); save(res.files); setStatus(`Saved ${res.files.map(f => f[0]).join(', ')}`); }
+  catch (err) { setStatus('Export failed: ' + err.message); }
+  btns.forEach(b => b.disabled = false);
+}
+$('exBed').onclick = (e) => exportIt('bed3mf', e.target);
+$('exOne').onclick = (e) => exportIt('one3mf', e.target);
+$('exStl').onclick = (e) => exportIt('stl', e.target);
+$('exFit').onclick = (e) => exportIt('fitment', e.target);
+$('exClass').onclick = (e) => { const r = parseRoster(); if (!r.length) return setStatus('Add at least one student to the list'); exportIt('class', e.target, { roster: r }); };
+
+// ================================================================ Spin Compass
+for (const g of ['body', 'white', 'gold', 'caps']) { const sel = $('sp-slot-' + g); for (let i = 1; i <= 5; i++) sel.add(new Option(`Slot ${i}`, i)); sel.value = { body: 1, white: 2, gold: 3, caps: 1 }[g]; }
+function spinParams() {
+  return { name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), extras: [0, 1, 2, 3].map(i => $('x' + i).value || ['Truth', 'Dare', 'Again', 'Choose'][i]),
+    order: $('spOrder').value, printer: $('spPrinter').value, disc: $('spDisc').value, leds: $('spLeds').value, battery: $('spBattery').value, speaker: $('spSpeaker').value, imu: $('spImu').value, slots: Object.fromEntries(['body', 'white', 'gold', 'caps'].map(g => [g, +$('sp-slot-' + g).value])) };
+}
+function setModel(m) {
+  model = m;
+  document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pressed', b.dataset.model === m));
+  document.querySelectorAll('.only-compass').forEach(el => el.hidden = m !== 'compass');
+  document.querySelectorAll('.only-spin').forEach(el => el.hidden = m !== 'spin');
+  const cur = document.querySelector('.tabs button[aria-selected=true]');
+  if (cur && cur.hidden) document.querySelector('[data-view="3d"]').click();
+  try { localStorage.setItem('compass-studio-model', m); } catch (_) {}
+  rebuild();
+}
+document.querySelectorAll('.model button').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
+const PART_COL = { board: '#2f7d6b', battery: '#b9bec4', speaker: '#2b2b2b', amp: '#6b4fa3', imu: '#3f8f3a', hall: '#e0b030' };
+let spinBusy = false, spinAgain = false;
+async function rebuildSpin() {
+  if (spinBusy) { spinAgain = true; return; }
+  spinBusy = true; setStatus('Building the Spin Compass…', true);
+  try {
+    const res = await call({ type: 'spinBuild', spin: spinParams() });
+    spinLast = res; if (mode !== 'play' && mode !== 'bed') showSpin(res); renderSpin(res); drawBed(); if (play) play.refresh();
+    if (!voiceUI) voiceUI = mountVoice($('voiceBox'), { info: () => spinLast && { ...spinLast.info, name: $('name').value }, prompts: () => playConfig().prompts, status: setStatus, save });
+    voiceUI.refresh();
+    $('voiceBox').closest('details').hidden = !res.info.parts.some(p => p.key === 'speaker');
+    setStatus(`Built in ${(res.ms / 1000).toFixed(2)} s`);
+  } catch (err) { setStatus('Could not build: ' + err.message); }
+  spinBusy = false; if (spinAgain) { spinAgain = false; rebuildSpin(); }
+}
+function addMesh(mesh, key, fn) { const m = new THREE.Mesh(geo(mesh), mat(key)); if (fn) fn(m); group.add(m); return m; }
+function showSpin(res) {
+  for (const c of [...group.children]) { group.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
+  const M = res.meshes, A = res.info.assembly, ex = mode === 'explode', inside = mode === 'inside';
+  addMesh(M.tray, 'body');
+  if (!inside) {
+    addMesh(M.lid, 'body', m => { m.position.z = ex ? 26 : 0; });
+    addMesh(M.white, 'white', m => { m.position.z = ex ? 34 : 0; });
+    addMesh(M.gold, 'gold', m => { m.position.z = ex ? 30 : 0; });
+    addMesh(M.capTop, 'needle', m => { m.position.z = A.zTopCap + (ex ? 46 : 0); });
+    addMesh(M.capPtr, 'white', m => { m.position.z = A.zTopCap + (ex ? 46 : 0); });
+  }
+  addMesh(M.capBot, 'needle', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - (ex ? 18 : 0); });
+  addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
+  const bear = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 7, 48), mat('bearing')); bear.rotation.x = Math.PI / 2; bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
+  if (inside || ex) {   // the electronics as blocks, so you can see what goes where
+    const lift = ex ? 12 : 0;
+    for (const p of res.info.parts) {
+      const col = PART_COL[p.key] || '#888', m = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5, metalness: p.key === 'battery' ? 0.5 : 0.1 });
+      const g = p.shape === 'circle' ? new THREE.CylinderGeometry(p.d / 2, p.d / 2, p.h, 40) : new THREE.BoxGeometry(p.tang, p.radial, p.h);
+      const o = new THREE.Mesh(g, m); if (p.shape === 'circle') o.rotation.x = Math.PI / 2;
+      const a = p.angle * Math.PI / 180, z = p.inHub ? A.zB0 + 7 - 0.6 - 0.9 : res.info.floor + p.h / 2 + 0.05;
+      o.position.set(p.r * Math.sin(a), p.r * Math.cos(a), z + lift); if (p.shape !== 'circle') o.rotation.z = -a; group.add(o);
+    }
+    for (const l of res.info.leds) {
+      const o = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 3, 32), mat('light')); o.rotation.x = Math.PI / 2;
+      const a = l.angle * Math.PI / 180; o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid - 1.5 + (ex ? 20 : 0)); group.add(o);
+    }
+    const b = res.info.balance;
+    for (const s of (b.slots || [])) {   // the steel BBs that balance it, in rows in their slots
+      const steel = mat('bearing'), a = s.angle * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), tx = Math.cos(a), ty = -Math.sin(a);
+      for (let k = 0; k < s.n; k++) { const off = (k - (s.n - 1) / 2) * 4.65, o = new THREE.Mesh(new THREE.SphereGeometry(2.25, 20, 14), steel);
+        const [dx, dy] = s.radialRow ? [ux * off, uy * off] : [tx * off, ty * off]; o.position.set(s.r * ux + dx, s.r * uy + dy, res.info.floor + 2.25 + lift); group.add(o); }
+    }
+  }
+  frame();
+}
+function renderSpin(res) {
+  const I = res.info, b = I.balance, bed = res.bed;
+  $('spWarn').innerHTML = ''; for (const t of I.warn) { const li = document.createElement('li'); li.textContent = t; $('spWarn').append(li); }
+  $('where').textContent = I.segments.map((s, i) => `${i + 1} ${s.label}`).join(' · ');
+  $('warn').innerHTML = '';
+  const dir = (a) => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(a / 45) % 8];
+  const rows = I.parts.map(p => `<tr><td><i style="background:${PART_COL[p.key] || '#888'}"></i>${p.label}</td><td>${p.inHub ? 'hub' : dir(p.angle)} · ${p.g} g</td></tr>`).join('');
+  const bbText = b.n ? `, then ${b.n} steel BB${b.n > 1 ? 's' : ''} (4.5 mm) in ${b.slots.length > 1 ? 'slots at ' + b.slots.map(s => dir(s.angle)).join(' and ') : 'the slot at ' + dir(b.angle)} bring it to ${b.residual.toFixed(1)}` : '';
+  $('spInside').innerHTML = `
+    <p>Everything rides in the disc and spins with it. The two caps and the pointer stay still between your thumb and finger.</p>
+    <table class="parts">${rows}<tr><td><i style="background:#ffe9a8"></i>${I.leds.length} × WS2812B LEDs under white windows</td><td>${(I.leds.length * 0.4).toFixed(1)} g</td></tr>
+    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 × M2 × 8 screws${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
+    <h4 style="margin-top:10px">Balance</h4>
+    <p>The parts are placed so the heavy ones oppose each other: ${b.raw.toFixed(1)} g·mm off centre${bbText}. That leftover is like ${((b.n ? b.residual : b.raw) / 38).toFixed(2)} g at the rim. Real parts weigh a little differently, so weigh them and add or remove a BB if it wobbles.</p>
+    <h4>Charging</h4><p>USB-C in the rim, straight into the XIAO board, which charges the battery. Micro-USB boards work too but are bigger; USB-C is the current standard.</p>
+    <h4>How it knows where it landed</h4><p>The hall sensor in the hub sees the cap's magnet once a turn, which marks the pointer. The IMU's gyro tracks the last slow turns, then the board lights that segment and plays its clip.</p>`;
+  renderBom();
+  $('spStats').innerHTML = `<div class="stat"><b>${bed.k}</b><span>full kits per bed</span></div><div class="stat"><b>${I.R * 2} mm</b><span>disc, ${I.H} mm thick</span></div>
+    <div class="stat wide"><span>Only the lid and the top cap have more than one colour, in their first five layers, so a kit costs about 8 colour changes.</span></div>`;
+  const sl = spinParams().slots;
+  $('legend').innerHTML = [['body', `body: slot ${sl.body}`], ['white', `letters, lines, LED windows: slot ${sl.white}`], ['gold', `gold segments: slot ${sl.gold}`], ['needle', `caps: slot ${sl.caps}`]].map(([k, l]) => `<span><i style="background:${FILAMENTS[k]}"></i>${l}</span>`).join('');
+}
+function drawSpinBed() {
+  const cv = $('bedCanvas'); if (cv.hidden || !spinLast) return;
+  const b = spinLast.bed, dpr = Math.min(2, devicePixelRatio), W = view.clientWidth, H = view.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+  const [bw, bh] = b.bed, k = Math.min((W - 40) / bw, (H - 50) / bh), ox = (W - bw * k) / 2, oy = (H - bh * k) / 2 + 10;
+  const css = getComputedStyle(document.documentElement), P = (px, py) => [ox + px * k, oy + (bh - py) * k];
+  x.fillStyle = css.getPropertyValue('--panel').trim(); x.strokeStyle = css.getPropertyValue('--muted').trim(); x.fillRect(ox, oy, bw * k, bh * k); x.strokeRect(ox, oy, bw * k, bh * k);
+  const t = b.tower; x.globalAlpha = 0.35; x.fillStyle = css.getPropertyValue('--muted').trim(); x.fillRect(...P(t[0], t[1] + t[3]), t[2] * k, t[3] * k); x.globalAlpha = 1;
+  const col = { tray: FILAMENTS.body, lid: FILAMENTS.gold, capTop: '#7d1a20', capBot: '#7d1a20', dome: FILAMENTS.white };
+  const name = { tray: 'tray', lid: 'lid (face down)', capTop: 'top cap', capBot: 'cap', dome: 'dome' };
+  for (const it of b.items) {
+    const [X, Y] = P(it.x, it.y); x.fillStyle = col[it.part]; x.beginPath(); x.arc(X, Y, it.r * k, 0, 7); x.fill();
+    x.fillStyle = it.part === 'dome' || it.part === 'lid' ? '#222' : '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `600 ${Math.max(10, 11 * k)}px system-ui`;
+    x.fillText(it.r > 20 ? `${name[it.part]} ${it.kit + 1}` : String(it.kit + 1), X, Y);
+  }
+  x.textAlign = 'start'; x.textBaseline = 'alphabetic'; x.fillStyle = css.getPropertyValue('--muted').trim(); x.font = '12px system-ui';
+  x.fillText(`${b.printer}: ${bw} × ${bh} mm · ${b.k} complete Spin Compass kit${b.k > 1 ? 's' : ''} · wipe tower shaded`, ox, oy + bh * k + 18);
+}
+let play = null, voiceUI = null, bomLast = null;
+const money = (v) => '$' + v.toFixed(2);
+function renderBom() {
+  if (!spinLast) return;
+  const qty = Math.max(1, Math.min(200, Math.round(+$('bomQty').value || 1)));
+  const b = spinBom(spinParams(), spinLast.info, spinLast.info.grams, qty); bomLast = b;
+  let html = '<div class="bomwrap"><table class="bom"><thead><tr><th>Part</th><th class="n">Each</th><th class="n">Buy</th><th class="n">Order</th></tr></thead><tbody>', grp = '';
+  for (const r of b.rows) {
+    if (r.group !== grp) { grp = r.group; html += `<tr class="grp"><td colspan="4">${grp}</td></tr>`; }
+    const name = r.link ? `<a href="${r.link}" target="_blank" rel="noopener">${r.item}</a>` : r.item;
+    html += `<tr><td>${name}<small>${r.per}${r.unitLabel === 'ea' ? ' ×' : ' ' + r.unitLabel} · ${r.store}${r.note ? ' · ' + r.note : ''}</small></td><td class="n">${money(r.each)}</td><td class="n">${r.buy}</td><td class="n">${money(r.order)}</td></tr>`;
+  }
+  html += `</tbody><tfoot><tr><td>Total</td><td class="n">${money(b.each)}</td><td></td><td class="n">${money(b.order)}</td></tr></tfoot></table></div>
+    <p class="hint"><b>By store</b> (before shipping and tax): ${Object.entries(b.stores).sort((x, y) => y[1] - x[1]).map(([s, v]) => `${s} ${money(v)}`).join(' · ')}.</p>
+    <p class="hint">"Each" is one spinner's parts; "Order" is what ${qty} cost to buy with packs rounded up. Prices from real listings checked ${b.checked}; they change, so check at checkout.</p>`;
+  $('bomBox').innerHTML = html;
+}
+$('bomQty').addEventListener('input', renderBom);
+$('bomCsv').onclick = () => { if (!bomLast) return; save([[`spin_compass_parts_x${bomLast.qty}.csv`, new TextEncoder().encode(bomCSV(bomLast))]]); setStatus('Saved the parts list'); };
+$('bomCopy').onclick = async () => {
+  if (!bomLast) return;
+  const t = bomLast.rows.map(r => `${r.buy.padEnd(10)} ${r.item}  (${money(r.order)}, ${r.store})  ${r.link}`).join('\n') + `\nTotal for ${bomLast.qty}: ${money(bomLast.order)} (${money(bomLast.each)} each)`;
+  try { await navigator.clipboard.writeText(t); setStatus('Parts list copied'); } catch (_) { setStatus('Copy was blocked; use the CSV'); }
+};
+function playConfig() {
+  const I = spinLast ? spinLast.info : null;
+  const segs = I ? I.segments.map(s => ({ label: s.label, kind: s.kind })) : undefined;
+  const value = {}; if (segs) for (const s of segs) if (s.kind === 'value') value[s.label] = valuePrompts(s.label);
+  return { segments: segs, leds: I ? I.leds : undefined, R: I ? I.R : 41, prompts: { ...DEFAULT_PROMPTS, value }, voice: $('spVoice').checked };
+}
+function showPlay() { if (!play) play = mountPlay($('playBox'), playConfig); else play.refresh(); }
+$('spVoice').addEventListener('change', () => { if (play) play.refresh(); });
+async function spinExport(what) {
+  const btns = document.querySelectorAll('.btn'); btns.forEach(b => b.disabled = true); setStatus('Exporting…', true);
+  try { const res = await call({ type: 'spinExport', what, spin: spinParams() }); save(res.files); setStatus(`Saved ${res.files.map(f => f[0]).join(', ')}`); }
+  catch (err) { setStatus('Export failed: ' + err.message); }
+  btns.forEach(b => b.disabled = false);
+}
+$('spKit').onclick = () => spinExport('kit');
+$('spStl').onclick = () => spinExport('stl');
+$('spFw').onclick = () => spinExport('firmware');
+try { if (localStorage.getItem('compass-studio-model') === 'spin') model = 'spin'; } catch (_) {}
+document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pressed', b.dataset.model === model));
+document.querySelectorAll('.only-compass').forEach(el => el.hidden = model !== 'compass');
+document.querySelectorAll('.only-spin').forEach(el => el.hidden = model !== 'spin');
+
+call({ type: 'init' }).then(() => { rebuild().then(rosterInfo); }).catch(err => setStatus('The geometry engine did not load: ' + err.message));

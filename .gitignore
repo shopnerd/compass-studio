@@ -1,0 +1,6 @@
+test/out/
+test/*.png
+test/*.wav
+HANDOFF-*.md
+.playwright-cli/
+desktop.ini
