@@ -82,8 +82,10 @@ function showCompass(res) {
   }
   frame();
 }
+let fitK = 1;   // >1 on tall, narrow views (phones): back the camera off so the sides are not cut
 function frame() {
-  const R = model === 'spin' ? (spinLast ? spinLast.info.R : 41) : 37.5 * +$('scale').value;
+  fitK = Math.max(1, 1.3 / camera.aspect);
+  const R = (model === 'spin' ? (spinLast ? spinLast.info.R : 41) : 37.5 * +$('scale').value) * fitK;
   controls.target.set(0, 3, 3);
   if (mode === 'top') camera.position.set(0, 0.01, R * 4.4);
   else if (mode === 'back') camera.position.set(0, 0.01, -R * 4.4);
@@ -94,7 +96,9 @@ function frame() {
 }
 function size() {
   const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false);
-  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); drawBed(); draw();
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  if (Math.abs(Math.max(1, 1.3 / camera.aspect) - fitK) > 0.05) frame();
+  drawBed(); draw();
 }
 let raf = 0; function draw() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderer.render(scene, camera); }); }
 controls.addEventListener('change', draw);

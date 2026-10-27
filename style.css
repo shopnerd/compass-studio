@@ -20,7 +20,14 @@ body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); di
 .status.busy::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .25; } }
 .layout { flex: 1; display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); min-height: 0; }
-@media (max-width: 820px) { .layout { grid-template-columns: minmax(0, 1fr); } .stage { min-height: 70vh; order: -1; } }
+@media (max-width: 820px) {   /* phones: the page scrolls; the 3D view is a fixed-height box on top */
+  html, body { height: auto; }
+  body { display: block; }
+  .layout { display: flex; flex-direction: column; }
+  .stage { order: -1; height: 62vh; height: 62svh; min-height: 320px; overflow: hidden; }
+  .view { min-height: 0; overflow: hidden; }
+  .panel { overflow: visible; border-right: 0; }
+}
 .panel { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 4px 16px 24px; }
 details { border-bottom: 1px solid var(--line); padding: 10px 0 14px; }
 summary { font-weight: 600; cursor: pointer; padding: 4px 0 8px; list-style-position: outside; }
