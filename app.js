@@ -48,7 +48,7 @@ view.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 1, 2000);
 const controls = makeOrbit(camera, renderer.domElement, () => draw());
-if (location.search.includes('debug')) window.__view = { camera, controls };
+if (location.search.includes('debug')) window.__view = { camera, controls, renderer, THREE, draw: () => draw() };
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(60, -80, 160); scene.add(sun);
 const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(-80, 90, -60); scene.add(rim);
@@ -275,7 +275,12 @@ function showSpin(res) {
     addMesh(M.capTop, 'needle', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
     addMesh(M.capPtr, 'white', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
   }
-  addMesh(M.capBot, 'needle', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - (ex ? 18 : 0); });
+  addMesh(M.capBot, 'needle', m => { m.position.z = A.zBotCap - (ex ? 18 : 0); });   // peg up into the bearing
+  if (A.capJ && res.info.insert) {   // the cap clamp: insert in the bottom peg's tip, M2 flat-head down through the top cap
+    const J = A.capJ, ins = res.info.insert;
+    const iv = insertModel(ins.len, ins.knurl); iv.position.z = A.zBotCap + A.capT - 1 + 0.5 + J.botPeg - (ex ? 18 : 0); group.add(iv);
+    if (!inside) { const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.position.z = A.zTopCap + A.capT - J.cb + (ex ? 76 : 0); group.add(sc); }
+  }
   addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
   const bear = bearingMesh(22, 8, 7); bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
   if (inside || ex || xr) {   // the electronics, drawn as the real parts
@@ -316,7 +321,7 @@ function renderSpin(res) {
   $('spInside').innerHTML = `
     <p>Everything rides in the disc and spins with it. The two caps and the pointer stay still between your thumb and finger.</p>
     <table class="parts">${rows}<tr><td><i style="background:#ffe9a8"></i>${I.leds.length} × WS2812B LEDs under white windows</td><td>${(I.leds.length * 0.4).toFixed(1)} g</td></tr>
-    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 M2 × 4 brass heat-set inserts in the bosses and 3 M2 × 6 flat-head screws through the lid${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
+    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 4 M2 × 4 brass heat-set inserts and 4 M2 × 6 flat-head screws (3 hold the lid, 1 clamps the caps through the bearing)${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
     <h4 style="margin-top:10px">Balance</h4>
     <p>The parts are placed so the heavy ones oppose each other: ${b.raw.toFixed(1)} g·mm off centre${bbText}. That leftover is like ${((b.n ? b.residual : b.raw) / 38).toFixed(2)} g at the rim. Real parts weigh a little differently, so weigh them and add or remove a BB if it wobbles.</p>
     <h4>Charging</h4><p>USB-C in the rim, straight into the XIAO board, which charges the battery. Micro-USB boards work too but are bigger; USB-C is the current standard.</p>

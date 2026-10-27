@@ -22,6 +22,15 @@ export const SPIN_PARTS = {
 // Lid screws go into brass heat-set inserts in the tray bosses. ruthex RX-M2x4 numbers (the same as Box Studio's M2):
 // printed hole 3.2, insert 4.0 long, knurl 3.6, min wall 1.3; the lid gets a 2.4 clearance hole and a 90° countersink
 // for the 4.0 flat head. Screw M2 × 6: 2.4 lid + 4.0 insert, tip 0.4 short of the insert's end.
+// Cap joint through the 608's 7 mm bore: top peg + gap + bottom peg = bore length; the screw head sits cb below the
+// top cap's face, so an M2 × 6 reaches screwLen - (topPeg + gap + 0.5 + cb + capT - capT) into the insert.
+export function capJoint(b = { w: 7 }, capT = 3) {
+  const topPeg = 1.2, gap = 0.4, botPeg = b.w - topPeg - gap, cb = 2.0, cs = (INSERT.head + 0.2 - INSERT.clear) / 2;
+  const headTop = capT - cb;                                   // in top-cap coordinates (face at capT, shoulder below 0)
+  const tip = headTop - INSERT.screwLen;                       // screw tip, top-cap coordinates
+  const insertTop = -0.5 - topPeg - gap;                       // bottom peg's tip, top-cap coordinates
+  return { topPeg, gap, botPeg, cb, cs, engage: insertTop - tip, spare: tip - (insertTop - INSERT.len), wall: (7.95 - INSERT.knurl) / 2 };
+}
 export const INSERT = { name: 'M2 × 4 brass heat-set insert', hole: 3.2, len: 4.0, knurl: 3.6, wall: 1.6, clear: 2.4, head: 4.0, screwLen: 6, chamfer: 0.4,
   get bossR() { return this.hole / 2 + this.wall; }, get depth() { return this.len + 1; },
 };
@@ -326,13 +335,23 @@ export function buildSpinner(K, S0) {
   const capR = wellR - 0.6, capT = 3;
   const peg = (h) => cyl(0.5, 6, 0, 48).add(cyl(h, S.pegD / 2, 0.5, 48));
   const zTopCap = zB0 + b.w + 0.5;
-  let capTop = cyl(capT, capR, 0, 96).add(peg(b.w / 2 - 0.3).rotate([180, 0, 0]));
+  // The caps clamp the bearing's inner ring between their shoulders: an M2 × 6 flat-head screw goes down through the
+  // top cap into a heat-set insert in the bottom cap's peg. The pegs stop CAP.gap apart, so the screw pulls the shoulders
+  // onto the race, not peg onto peg. Top: short centring peg, counterbore + countersink so the head sits below the face.
+  const CAPJ = capJoint(b, capT);
+  let capTop = cyl(capT, capR, 0, 96).add(peg(CAPJ.topPeg).rotate([180, 0, 0]));
+  capTop = capTop.subtract(cyl(capT + CAPJ.topPeg + 1, INSERT.clear / 2, -CAPJ.topPeg - 0.6, 32));                     // screw clearance
+  capTop = capTop.subtract(cyl(CAPJ.cb + 0.01, INSERT.head / 2 + 0.2, capT - CAPJ.cb, 40));                           // counterbore
+  capTop = capTop.subtract(Manifold.cylinder(CAPJ.cs + 0.01, INSERT.clear / 2, INSERT.head / 2 + 0.1, 32).translate([0, 0, capT - CAPJ.cb - CAPJ.cs]));   // 90° countersink
   capTop = capTop.subtract(cyl(1.7, 1.66, -0.01, 24, ...at(hall.r, 0)));                                           // magnet pocket over the hall sensor
   const ptr = mk([[at(capR - 0.6, 0), at(capR - 7, -3.2), at(capR - 7, 3.2)]], 'NonZero');
   const capPtr = ext(ptr, 0.6, capT - 0.6);
   capTop = capTop.subtract(capPtr);
   // bottom cap: flat, peg up (prints without supports). The dome is a separate button glued on for table spins.
-  const capBot = cyl(capT - 1, capR, 0, 96).add(peg(b.w / 2 - 0.3).translate([0, 0, capT - 1]));
+  let capBot = cyl(capT - 1, capR, 0, 96).add(peg(CAPJ.botPeg).translate([0, 0, capT - 1]));
+  { const top = capT - 1 + 0.5 + CAPJ.botPeg;   // heat-set insert in the peg's tip, flush
+    capBot = capBot.subtract(cyl(INSERT.depth + 0.01, INSERT.hole / 2, top - INSERT.depth, 32));
+    capBot = capBot.subtract(Manifold.cylinder(INSERT.chamfer + 0.01, INSERT.hole / 2, INSERT.hole / 2 + INSERT.chamfer, 32).translate([0, 0, top - INSERT.chamfer])); }
   const dome = Manifold.sphere(capR * 1.3, 128).translate([0, 0, 2.4 - capR * 1.3]).intersect(cyl(2.4, capR - 1, 0, 96));
 
   const ok = (m) => m && !m.isEmpty();
@@ -341,7 +360,7 @@ export function buildSpinner(K, S0) {
   return {
     S, L, warn,
     parts: { tray, lid: lidM, white: whiteOut, gold, capTop, capPtr, capBot, dome },
-    assembly: { zLid, zTopCap, zB0, capT },
+    assembly: { zLid, zTopCap, zB0, capT, zBotCap: zB0 - 0.5 - (capT - 1), capJ: CAPJ },
     print: {   // print poses: tray as is; lid face down (smooth bed-side face); top cap face down; bottom cap + dome flat
       tray: { body: tray },
       lid: { body: lidM.rotate([180, 0, 0]).translate([0, 0, H]), white: whiteOut.rotate([180, 0, 0]).translate([0, 0, H]), gold: gold.rotate([180, 0, 0]).translate([0, 0, H]) },

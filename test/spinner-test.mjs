@@ -19,11 +19,21 @@ function run(S, label) {
   for (const [k, m] of Object.entries(P)) if (!K.valid(m) || m.isEmpty()) fail(`${label}: ${k} invalid/empty`);
   // assembled: tray, lid, inlays must not overlap; caps placed on the bearing must not touch tray or lid
   const { zTopCap, zB0 } = sp.assembly;
-  const capTop = P.capTop.translate([0, 0, zTopCap]), capBot = P.capBot.rotate([180, 0, 0]).translate([0, 0, zB0 - 0.5]);
+  const capTop = P.capTop.translate([0, 0, zTopCap]), capBot = P.capBot.translate([0, 0, sp.assembly.zBotCap]);
   const solids = { tray: P.tray, lid: P.lid, white: P.white, gold: P.gold, capTop, capBot };
   const names = Object.keys(solids);
   for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
     const v = solids[names[i]].intersect(solids[names[j]]).volume(); if (v > 0.01) fail(`${label}: ${names[i]} ∩ ${names[j]} = ${v.toFixed(3)} mm³`);
+  }
+  { // cap clamp: pegs really in the bore, not touching each other, screw reaches the insert and stops short of its end
+    const J = sp.assembly.capJ, bore = K.Manifold.cylinder(6.6, 3.9, 3.9, 32).translate([0, 0, zB0 + 0.2]);
+    if (capBot.intersect(bore).volume() < 150) fail(`${label}: bottom cap peg is not in the bearing bore`);
+    if (capTop.intersect(capBot).volume() > 0.001) fail(`${label}: cap pegs touch, so the screw would not clamp the race`);
+    if (J.engage < 2.5 || J.spare < 0.3) fail(`${label}: cap screw grips ${J.engage.toFixed(1)} mm, ${J.spare.toFixed(1)} mm short of the insert end`);
+    if (J.wall < 1.3) fail(`${label}: only ${J.wall.toFixed(2)} mm round the insert in the bottom peg`);
+    const shank = K.Manifold.cylinder(INSERT.screwLen - 1, 0.95, 0.95, 24).translate([0, 0, sp.assembly.zTopCap + sp.assembly.capT - J.cb - INSERT.screwLen]);
+    if (shank.intersect(capTop).volume() > 0.01 || shank.intersect(capBot).volume() > 0.01) fail(`${label}: cap screw path is blocked`);
+    for (const [k, m] of [['tray', P.tray], ['lid', P.lid]]) for (const [c, cm] of [['top cap', capTop], ['bottom cap', capBot]]) if (m.intersect(cm).volume() > 0.01) fail(`${label}: ${c} touches the ${k}`);
   }
   const L = sp.L, bal = L.balance;
   { // heat-set inserts: wall round the knurl, screw reaches into the insert but not past it, insert hole is really there
