@@ -117,3 +117,6 @@ textarea { font: 12.5px/1.5 var(--mono); resize: vertical; }
 .bom tr.grp td { font: 600 11px var(--sans); color: var(--muted); padding-top: 10px; border-bottom: 0; }
 .bom tfoot td { font-weight: 600; border-bottom: 0; padding-top: 8px; }
 .bomwrap { overflow-x: auto; }
+
+.tabs .xray { margin-left: auto; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; margin-bottom: 4px; color: var(--ink); }
+.tabs .xray[aria-pressed=true] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }

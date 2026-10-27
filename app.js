@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { makeOrbit } from './orbit.js';
 import { DEFAULTS, FILAMENTS, compassPrint, needlePrint, LIGHT } from './core.js';
 import { mountPlay } from './play.js';
+import { partModel, ledModel, magnetModel, screwModel, PART_SWATCH } from './components3d.js';
 import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
 import { mountVoice } from './voice-ui.js';
 import { spinBom, bomCSV } from './bom.js';
@@ -101,11 +102,11 @@ let fitK = 1;   // >1 on tall, narrow views (phones): back the camera off so the
 function frame() {
   fitK = Math.max(1, 1.3 / camera.aspect);
   const R = (model === 'spin' ? (spinLast ? spinLast.info.R : 41) : 37.5 * +$('scale').value) * fitK;
-  controls.target.set(0, 3, 3);
+  controls.target.set(0, 3, model === 'spin' && mode === 'explode' ? 22 : 3);
   const t = controls.target, V = (x, y, z) => new THREE.Vector3(t.x + x, t.y + y, t.z + z);
   if (mode === 'top') controls.set(V(0, 0, R * 4.4), new THREE.Vector3(0, 1, 0));
   else if (mode === 'back') controls.set(V(0, 0, -R * 4.4), new THREE.Vector3(0, 1, 0));
-  else if (mode === 'explode') controls.set(V(R * 2.2, -R * 3.2, R * 2.6), new THREE.Vector3(0, 0, 1));
+  else if (mode === 'explode') controls.set(model === 'spin' ? V(R * 2.6, -R * 3.8, R * 2.4) : V(R * 2.2, -R * 3.2, R * 2.6), new THREE.Vector3(0, 0, 1));
   else controls.set(V(R * 1.6, -R * 2.6, R * 2.7), new THREE.Vector3(0, 0, 1));
 }
 function size() {
@@ -195,8 +196,8 @@ function insideInfo(p, one, d) {
 
 // ---------------------------------------------------------------- inputs, views, exports
 document.querySelectorAll('#panel input, #panel select').forEach(el => { if (el.id !== 'roster' && el.id !== 'bomQty') el.addEventListener('input', (e) => { if (!e.target.closest('#voiceBox')) schedule(); }); });
-document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+document.querySelectorAll('.tabs [data-view]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs [data-view]').forEach(x => x.setAttribute('aria-selected', x === b));
   mode = b.dataset.view; const bed = mode === 'bed', playing = mode === 'play';
   $('bedCanvas').hidden = !bed; $('playBox').hidden = !playing; renderer.domElement.hidden = bed || playing;
   if (playing) return showPlay();
@@ -237,13 +238,13 @@ function setModel(m) {
   document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pressed', b.dataset.model === m));
   document.querySelectorAll('.only-compass').forEach(el => el.hidden = m !== 'compass');
   document.querySelectorAll('.only-spin').forEach(el => el.hidden = m !== 'spin');
-  const cur = document.querySelector('.tabs button[aria-selected=true]');
+  const cur = document.querySelector('.tabs [data-view][aria-selected=true]');
   if (cur && cur.hidden) document.querySelector('[data-view="3d"]').click();
   try { localStorage.setItem('compass-studio-model', m); } catch (_) {}
   rebuild();
 }
 document.querySelectorAll('.model button').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
-const PART_COL = { board: '#2f7d6b', battery: '#b9bec4', speaker: '#2b2b2b', amp: '#6b4fa3', imu: '#3f8f3a', hall: '#e0b030' };
+const PART_COL = PART_SWATCH;
 let spinBusy = false, spinAgain = false;
 async function rebuildSpin() {
   if (spinBusy) { spinAgain = true; return; }
@@ -258,33 +259,40 @@ async function rebuildSpin() {
   } catch (err) { setStatus('Could not build: ' + err.message); }
   spinBusy = false; if (spinAgain) { spinAgain = false; rebuildSpin(); }
 }
-function addMesh(mesh, key, fn) { const m = new THREE.Mesh(geo(mesh), mat(key)); if (fn) fn(m); group.add(m); return m; }
+let spinXray = false, shellSeeThrough = false;
+const xmats = {};
+function xmat(k) { return xmats[k] ||= Object.assign(mat(k).clone(), { transparent: true, opacity: 0.16, depthWrite: false }); }
+function addMesh(mesh, key, fn) { const m = new THREE.Mesh(geo(mesh), shellSeeThrough ? xmat(key) : mat(key)); if (fn) fn(m); group.add(m); return m; }
 function showSpin(res) {
   for (const c of [...group.children]) { group.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
-  const M = res.meshes, A = res.info.assembly, ex = mode === 'explode', inside = mode === 'inside';
+  const M = res.meshes, A = res.info.assembly, ex = mode === 'explode', inside = mode === 'inside', xr = spinXray && !inside && !ex;
+  shellSeeThrough = xr;
   addMesh(M.tray, 'body');
   if (!inside) {
-    addMesh(M.lid, 'body', m => { m.position.z = ex ? 26 : 0; });
-    addMesh(M.white, 'white', m => { m.position.z = ex ? 34 : 0; });
-    addMesh(M.gold, 'gold', m => { m.position.z = ex ? 30 : 0; });
-    addMesh(M.capTop, 'needle', m => { m.position.z = A.zTopCap + (ex ? 46 : 0); });
-    addMesh(M.capPtr, 'white', m => { m.position.z = A.zTopCap + (ex ? 46 : 0); });
+    addMesh(M.lid, 'body', m => { m.position.z = ex ? 40 : 0; });
+    addMesh(M.white, 'white', m => { m.position.z = ex ? 48 : 0; });
+    addMesh(M.gold, 'gold', m => { m.position.z = ex ? 44 : 0; });
+    addMesh(M.capTop, 'needle', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
+    addMesh(M.capPtr, 'white', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
   }
   addMesh(M.capBot, 'needle', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - (ex ? 18 : 0); });
   addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
   const bear = bearingMesh(22, 8, 7); bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
-  if (inside || ex) {   // the electronics as blocks, so you can see what goes where
-    const lift = ex ? 12 : 0;
-    for (const p of res.info.parts) {
-      const col = PART_COL[p.key] || '#888', m = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5, metalness: p.key === 'battery' ? 0.5 : 0.1 });
-      const g = p.shape === 'circle' ? new THREE.CylinderGeometry(p.d / 2, p.d / 2, p.h, 40) : new THREE.BoxGeometry(p.tang, p.radial, p.h);
-      const o = new THREE.Mesh(g, m); if (p.shape === 'circle') o.rotation.x = Math.PI / 2;
-      const a = p.angle * Math.PI / 180, z = p.inHub ? A.zB0 + 7 - 0.6 - 0.9 : res.info.floor + p.h / 2 + 0.05;
-      o.position.set(p.r * Math.sin(a), p.r * Math.cos(a), z + lift); if (p.shape !== 'circle') o.rotation.z = -a; group.add(o);
+  if (inside || ex || xr) {   // the electronics, drawn as the real parts
+    const lift = ex ? 12 : 0, I = res.info, rad = d => d * Math.PI / 180;
+    for (const p of I.parts) {
+      const o = partModel(p, I), a = rad(p.angle);
+      const z0 = p.inHub ? A.zB0 + 7 - 0.6 - 0.9 - p.h / 2 : I.floor + 0.05;
+      o.rotation.z = -a; o.position.set(p.r * Math.sin(a), p.r * Math.cos(a), z0 + (p.inHub ? 0 : lift)); group.add(o);
     }
-    for (const l of res.info.leds) {
-      const o = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 1.6), mat('light'));   // WS2812B 5050, sits in its pocket under the lid
-      const a = l.angle * Math.PI / 180; o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid + 0.8 + (ex ? 20 : 0)); o.rotation.z = -a; group.add(o);
+    for (const l of I.leds) {   // round WS2812B boards, chip up in the lid pockets
+      const o = ledModel(), a = rad(l.angle); o.rotation.z = -a;
+      o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid - 1.0 + (ex ? 28 : 0)); group.add(o);
+    }
+    const hl = I.parts.find(p => p.key === 'hall');
+    if (hl && !inside) { const m = magnetModel(); m.position.set(0, hl.r, A.zTopCap + (ex ? 58 : 0)); group.add(m); }   // in the top cap, over the hall sensor
+    if (!inside && I.rScrew) for (const sa of I.screws) {   // M2 screws through the lid into the bosses
+      const sc = screwModel(8), a = rad(sa); sc.position.set(I.rScrew * Math.sin(a), I.rScrew * Math.cos(a), A.zLid + I.lidT + (ex ? 54 : 0)); group.add(sc);
     }
     const b = res.info.balance;
     for (const s of (b.slots || [])) {   // the steel BBs that balance it, in rows in their slots
@@ -378,6 +386,7 @@ $('spStl').onclick = () => spinExport('stl');
 $('spFw').onclick = () => spinExport('firmware');
 try { if (localStorage.getItem('compass-studio-model') === 'spin') model = 'spin'; } catch (_) {}
 document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pressed', b.dataset.model === model));
+$('xray').addEventListener('click', () => { spinXray = !spinXray; $('xray').setAttribute('aria-pressed', spinXray); if (spinXray && (mode === 'inside' || mode === 'explode' || mode === 'play' || mode === 'bed')) document.querySelector('[data-view="3d"]').click(); else if (spinLast) showSpin(spinLast); });
 document.querySelectorAll('.only-compass').forEach(el => el.hidden = model !== 'compass');
 document.querySelectorAll('.only-spin').forEach(el => el.hidden = model !== 'spin');
 

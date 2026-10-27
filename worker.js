@@ -102,7 +102,7 @@ onmessage = async (e) => {
       const S = { ...SPIN_DEFAULTS, ...m.spin, slots: { ...SPIN_DEFAULTS.slots, ...((m.spin || {}).slots || {}) } };
       const t0 = performance.now(); const sp = buildSpinner(K, S); const ms = performance.now() - t0;
       const L = sp.L, info = { parts: L.parts.map(({ key, label, angle, r, shape, radial, tang, d, h, g, inHub }) => ({ key, label, angle, r, shape, radial, tang, d, h, g, inHub })),
-        leds: L.leds, segments: L.segments, balance: L.balance, bbSlots: L.bbSlots, imuClass: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).cls, imuLabel: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).label, screws: L.screws, warn: sp.warn, assembly: sp.assembly, R: sp.S.R, H: sp.S.H, floor: sp.S.floor,
+        leds: L.leds, segments: L.segments, balance: L.balance, bbSlots: L.bbSlots, imuClass: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).cls, imuLabel: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).label, screws: L.screws, rScrew: L.rOut - 2.8, lidT: sp.S.lid, imu: S.imu, warn: sp.warn, assembly: sp.assembly, R: sp.S.R, H: sp.S.H, floor: sp.S.floor,
         grams: (() => { const g = (m) => m.volume() * 1.24 / 1000, P = sp.parts; return { body: g(P.tray) + g(P.lid), letters: g(P.white) + g(P.capPtr), gold: g(P.gold), caps: g(P.capTop) + g(P.capBot) + g(P.dome) }; })() };
       if (m.type === 'spinBuild') {
         const meshes = Object.fromEntries(Object.entries(sp.parts).map(([k, v]) => [k, K.toMesh(v)]));

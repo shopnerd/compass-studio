@@ -47,10 +47,10 @@ export const SPIN_DEFAULTS = {
   order: 'mix',                    // mix: value, game, value, game…   values: the four values together
   name: 'Name Example',
   battery: '302025', speaker: '20', leds: '12', disc: '86', imu: 'dsox',
-  R: 41, H: 13, floor: 1.2, lid: 2.4, wall: 1.6, wellR: 15, wellDepth: 3,
+  R: 41, H: 13, floor: 1.2, lid: 2.4, wall: 1.6, wellR: 14.6, hubR: 16.2, wellDepth: 3,   // hub ring: bore 11 -> 16.2, 1.6 mm wall round the finger wells
   boreR: 11.0, pegD: 7.95,
   layout: 'auto',                  // 'auto' = best-balanced arrangement that fits, or { part: angle }
-  ledsOuter: 8, ledsInner: 4, rOuterLed: 32.5, rInnerLed: 21,
+  ledsOuter: 8, ledsInner: 4, rOuterLed: 32.5, rInnerLed: 21.8,
   slots: { body: 1, white: 2, gold: 3, caps: 1 },
   printer: 'mk4s', gap: 4, margin: 3, layer: 0.2,
 };
@@ -105,8 +105,8 @@ export function autoLayout(S) {
 let autoCache = null;
 export function spinLayout(S, quick = false, coarse = false) {
   S = resolveChoices(S);
-  const rIn = S.wellR + 0.2, rOut = S.R - S.wall, warn = [], T = partTable(S);
-  if (S.layout === 'auto' || !S.layout) { const k = `${S.R}|${S.wellR}|${S.wall}|${S.battery}|${S.speaker}|${S.leds}|${S.imu}`; if (!autoCache || autoCache.k !== k) autoCache = { k, lay: autoLayout({ ...S, layout: {} }) }; S = { ...S, layout: autoCache.lay }; }
+  const rIn = S.hubR ?? S.wellR + 1.6, rOut = S.R - S.wall, warn = [], T = partTable(S);
+  if (S.layout === 'auto' || !S.layout) { const k = `${S.R}|${S.wellR}|${S.hubR}|${S.wall}|${S.battery}|${S.speaker}|${S.leds}|${S.imu}`; if (!autoCache || autoCache.k !== k) autoCache = { k, lay: autoLayout({ ...S, layout: {} }) }; S = { ...S, layout: autoCache.lay }; }
   const parts = [];
   for (const [key, ang] of Object.entries(S.layout)) {
     const p = T[key]; if (!p) continue; let r;
@@ -115,7 +115,7 @@ export function spinLayout(S, quick = false, coarse = false) {
     r = key === 'board' ? rMax : Math.max(rMin, Math.min(rMax, (rMin + rMax) / 2));   // USB-C end of the board against the rim
     parts.push({ key, ...p, angle: ang, r });
   }
-  parts.push({ key: 'hall', ...SPIN_PARTS.hall, angle: 0, r: 13, inHub: true });
+  parts.push({ key: 'hall', ...SPIN_PARTS.hall, angle: 0, r: (S.boreR + rIn) / 2, inHub: true });   // mid-ring, ~0.9 mm wall each side
   // footprint as a polygon (rect) or circle, in body frame
   const poly = (p) => {
     if (p.shape === 'circle') return null;
@@ -273,7 +273,7 @@ export function buildSpinner(K, S0) {
   }
   // hall sensor pocket in the hub ring, under the well floor, with a wire slot into the cavity
   const hall = L.parts.find(p => p.key === 'hall'), hc = at(hall.r, hall.angle);
-  tray = tray.subtract(Manifold.cube([5.4, 3.6, 1.8], true).translate([hc[0], hc[1], zB0 + b.w - 0.6 - 0.9]));
+  tray = tray.subtract(Manifold.cube([hall.tang + 0.5, hall.radial + 0.4, 1.8], true).translate([0, hall.r, zB0 + b.w - 0.6 - 0.9]).rotate([0, 0, -hall.angle]));
   tray = tray.subtract(Manifold.cube([1.6, 6, 1.4], true).translate([0, hall.r + 2.6, zB0 + b.w - 0.6 - 0.9]).rotate([0, 0, -hall.angle]));
 
   // ---- lid: the wheel face. Printed face down; white letters, dividers and LED diffusers, gold alternate segments, gold north arrow

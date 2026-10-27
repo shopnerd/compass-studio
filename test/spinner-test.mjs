@@ -26,6 +26,11 @@ function run(S, label) {
     const v = solids[names[i]].intersect(solids[names[j]]).volume(); if (v > 0.01) fail(`${label}: ${names[i]} ∩ ${names[j]} = ${v.toFixed(3)} mm³`);
   }
   const L = sp.L, bal = L.balance;
+  { // walls round the hub: finger wells to cavity, hall pocket to bearing and to cavity
+    const hall = L.parts.find(p => p.key === 'hall'), Sx = L.S, half = (hall.radial + 0.4) / 2;
+    const walls = { well: L.rIn - Sx.wellR, hallBore: hall.r - half - Sx.boreR, hallCavity: L.rIn - (hall.r + half) };
+    for (const [k, v] of Object.entries(walls)) if (v < 0.8) fail(`${label}: hub wall ${k} only ${v.toFixed(2)} mm`);
+  }
   console.log(`${label}: ${ms.toFixed(0)} ms | tray ${P.tray.volume().toFixed(0)} lid ${P.lid.volume().toFixed(0)} white ${P.white.volume().toFixed(0)} gold ${P.gold.volume().toFixed(0)} mm³`);
   console.log(`  parts: ${L.parts.map(p => `${p.key}@${p.angle}°/r${p.r.toFixed(1)}`).join('  ')}`);
   console.log(`  balance: off-centre ${bal.raw.toFixed(1)} g·mm → ${bal.n ? `${bal.n} BBs at ${bal.angle}°, r ${bal.r.toFixed(1)} → ${bal.residual.toFixed(1)} g·mm left` : 'no BBs'} | electronics ${bal.mass.toFixed(1)} g | screws at ${L.screws.join(', ')}°`);
