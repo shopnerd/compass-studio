@@ -55,7 +55,19 @@ const group = new THREE.Group(); scene.add(group);
 const mats = {};
 function mat(key) {
   const col = { body: FILAMENTS.body, white: FILAMENTS.white, gold: FILAMENTS.gold, needle: FILAMENTS.needle, bearing: '#a9adb1', light: '#ffe9a8' }[key];
-  return mats[key] ||= new THREE.MeshStandardMaterial({ color: col, roughness: key === 'bearing' ? 0.25 : 0.55, metalness: key === 'gold' ? 0.35 : key === 'bearing' ? 0.9 : 0.02 });
+  return mats[key] ||= new THREE.MeshStandardMaterial({ color: col, roughness: key === 'bearing' ? 0.25 : 0.55, metalness: key === 'gold' ? 0.35 : key === 'bearing' ? 0.5 : 0.02 });
+}
+// A ball bearing as it looks: silver outer and inner races, a darker shield between, the bore open. Axis along z, centred.
+function bearingMesh(od, id, w) {
+  const g = new THREE.Group(), ring = (r0, r1, h, col, metal) => {
+    const sh = new THREE.Shape(); sh.absarc(0, 0, r1, 0, Math.PI * 2, false);
+    const hole = new THREE.Path(); hole.absarc(0, 0, r0, 0, Math.PI * 2, true); sh.holes.push(hole);
+    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 48 }), new THREE.MeshStandardMaterial({ color: col, roughness: 0.35, metalness: metal }));
+    m.position.z = -h / 2; g.add(m);
+  };
+  const R = od / 2, r = id / 2, t = (R - r) * 0.22;
+  ring(R - t, R, w, '#c9cdd2', 0.45); ring(r, r + t, w, '#c9cdd2', 0.45); ring(r + t, R - t, w - 0.5, '#7d848c', 0.2);
+  return g;
 }
 function geo(mesh) {
   const g = new THREE.BufferGeometry();
@@ -81,8 +93,7 @@ function showCompass(res) {
       const l = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.3, 16), mat('light')); l.rotation.x = Math.PI / 2;
       l.position.set(0, -y, n.position.z + 0.1); group.add(l);
     }
-    const bearing = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6.5, 4, 48, 1, true), mat('bearing'));
-    bearing.rotation.x = Math.PI / 2; bearing.position.z = d.dishZ - 2 + (ex ? 8 : 0); if (ex) group.add(bearing);
+    const bearing = bearingMesh(13, 5, 4); bearing.position.z = d.dishZ - 2 + (ex ? 8 : 0); if (ex) group.add(bearing);
   }
   frame();
 }
@@ -261,7 +272,7 @@ function showSpin(res) {
   }
   addMesh(M.capBot, 'needle', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - (ex ? 18 : 0); });
   addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
-  const bear = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 7, 48), mat('bearing')); bear.rotation.x = Math.PI / 2; bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
+  const bear = bearingMesh(22, 8, 7); bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
   if (inside || ex) {   // the electronics as blocks, so you can see what goes where
     const lift = ex ? 12 : 0;
     for (const p of res.info.parts) {
@@ -272,8 +283,8 @@ function showSpin(res) {
       o.position.set(p.r * Math.sin(a), p.r * Math.cos(a), z + lift); if (p.shape !== 'circle') o.rotation.z = -a; group.add(o);
     }
     for (const l of res.info.leds) {
-      const o = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 3, 32), mat('light')); o.rotation.x = Math.PI / 2;
-      const a = l.angle * Math.PI / 180; o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid - 1.5 + (ex ? 20 : 0)); group.add(o);
+      const o = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 1.6), mat('light'));   // WS2812B 5050, sits in its pocket under the lid
+      const a = l.angle * Math.PI / 180; o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid + 0.8 + (ex ? 20 : 0)); o.rotation.z = -a; group.add(o);
     }
     const b = res.info.balance;
     for (const s of (b.slots || [])) {   // the steel BBs that balance it, in rows in their slots
