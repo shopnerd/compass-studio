@@ -14,7 +14,8 @@ export const CATALOG = {
   bearing: { item: 'Antrader 608 bearings for fidget spinners (10)', spec: '8 × 22 × 7 mm, open (spins longest)', unit: 0.66, pack: 10, packPrice: 6.59, store: 'Amazon', link: 'https://www.amazon.com/dp/B07XD6PLV1', note: 'Prime. Sealed alternative: PGN 608-2RS B07XVPGMXQ, $9.95.' },
   magnet: { item: 'Neodymium disc magnets 3 × 1.5 mm, N48 (100)', spec: '3 × 1.5 mm', unit: 0.19, pack: 100, packPrice: 19.49, store: 'Amazon', link: 'https://www.amazon.com/dp/B0C67HB59N', note: 'Prime. Cheaper 3 × 1 mm 250-pack (B0F13KHDZH, $9.99) is a weaker field.' },
   bb: { item: 'BC Precision .177 steel BBs (500)', spec: '4.5 mm, ~0.37 g each', unit: 0.016, pack: 500, packPrice: 7.95, store: 'Amazon', link: 'https://www.amazon.com/dp/B01KKT2AU8', note: 'Prime. Or Daisy 350-count, B00279OFNA, $8.99.' },
-  screw: { item: 'M2 flat head self-tapping screw kit (800)', spec: 'Phillips countersunk, 4–20 mm, includes M2 × 8', unit: 0.0075, pack: 800, packPrice: 5.99, store: 'Amazon', link: 'https://www.amazon.com/dp/B0CY986CCR', note: 'Prime. Spare lengths for later builds.' },
+  screw: { item: 'iexcell M2 × 6 flat head socket screws (100)', spec: '304 stainless, 0.4 pitch, 90° head Ø3.85, 1.3 mm hex; includes the hex key', unit: 0.083, pack: 100, packPrice: 8.26, store: 'Amazon', link: 'https://www.amazon.com/dp/B0F8J59QF7', note: 'Prime (Oct 29 when checked). Backup: PATIKIL M2 × 6 flat head, 100, B0DLWNLVBG, $6.89.' },
+  insert: { item: 'uxcell M2 × 4 brass heat-set inserts (100)', spec: 'M2, 4 mm long, Ø3.5 knurl; printed hole Ø3.2, 5 mm deep', unit: 0.077, pack: 100, packPrice: 7.69, store: 'Amazon', link: 'https://www.amazon.com/dp/B0CTCQ6MHK', note: 'Prime (Oct 29 when checked). Set with a soldering iron at ~10–15 °C over the print temperature, flush with the boss. ruthex RX-M2x4 (70, B088QJG676, $9.99) is the reference size but shipped Nov 8–16.' },
   resistor: { item: 'Adafruit 100 kΩ resistors (25)', spec: '1/4 W through-hole; 2 per board for the battery divider', unit: 0.038, pack: 25, packPrice: 0.95, store: 'Adafruit', link: 'https://www.adafruit.com/product/2787', note: 'In stock.' },
   wire: { item: 'Adafruit 30 AWG silicone wire, 2 m (black 2003 + white 2006)', spec: 'two colours: power and data', unit: 0.38, pack: 2, packPrice: 0.75, store: 'Adafruit', link: 'https://www.adafruit.com/product/2003', note: 'Buy one black (2003) and one white (2006); red 2 m was out of stock.', per: 'm' },
   ca: { item: 'ALECPEA thin CA glue, 20 g', spec: 'holds BBs, magnet, LED boards', unit: 0, pack: 1, packPrice: 5.39, store: 'Amazon', link: 'https://www.amazon.com/dp/B0DKP4TVSF', note: 'Prime. Skip if BFMS has CA.', shared: true },
@@ -56,7 +57,7 @@ export function spinBom(S, info, grams, qty = 1) {
   add(CATALOG.resistor, 2);
   add(CATALOG.bearing, 1, 'Hardware'); add(CATALOG.magnet, 1, 'Hardware');
   if (info.balance.n) add(CATALOG.bb, info.balance.n, 'Hardware');
-  add(CATALOG.screw, 3, 'Hardware'); add(CATALOG.wire, 1, 'Hardware'); add(CATALOG.ca, 1, 'Hardware');
+  add(CATALOG.insert, 3, 'Hardware'); add(CATALOG.screw, 3, 'Hardware'); add(CATALOG.wire, 1, 'Hardware'); add(CATALOG.ca, 1, 'Hardware');
   // filament: one spool per colour covers far more than a few spinners, so the order line is what you use
   for (const [k, g] of Object.entries(grams)) {
     const gr = g * FILAMENT.fill;

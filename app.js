@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { makeOrbit } from './orbit.js';
 import { DEFAULTS, FILAMENTS, compassPrint, needlePrint, LIGHT } from './core.js';
 import { mountPlay } from './play.js';
-import { partModel, ledModel, magnetModel, screwModel, PART_SWATCH } from './components3d.js';
+import { partModel, ledModel, magnetModel, insertModel, flatScrewModel, PART_SWATCH } from './components3d.js';
 import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
 import { mountVoice } from './voice-ui.js';
 import { spinBom, bomCSV } from './bom.js';
@@ -291,8 +291,10 @@ function showSpin(res) {
     }
     const hl = I.parts.find(p => p.key === 'hall');
     if (hl && !inside) { const m = magnetModel(); m.position.set(0, hl.r, A.zTopCap + (ex ? 58 : 0)); group.add(m); }   // in the top cap, over the hall sensor
-    if (!inside && I.rScrew) for (const sa of I.screws) {   // M2 screws through the lid into the bosses
-      const sc = screwModel(8), a = rad(sa); sc.position.set(I.rScrew * Math.sin(a), I.rScrew * Math.cos(a), A.zLid + I.lidT + (ex ? 54 : 0)); group.add(sc);
+    if (I.rScrew && I.insert) for (const sa of I.screws) {   // brass inserts flush in the bosses; M2 flat-head screws through the lid's countersinks
+      const a = rad(sa), x = I.rScrew * Math.sin(a), y = I.rScrew * Math.cos(a), ins = I.insert;
+      const iv = insertModel(ins.len, ins.knurl); iv.position.set(x, y, A.zLid + (ex ? 8 : 0)); group.add(iv);
+      if (!inside) { const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.position.set(x, y, A.zLid + I.lidT + (ex ? 54 : 0)); group.add(sc); }
     }
     const b = res.info.balance;
     for (const s of (b.slots || [])) {   // the steel BBs that balance it, in rows in their slots
@@ -314,7 +316,7 @@ function renderSpin(res) {
   $('spInside').innerHTML = `
     <p>Everything rides in the disc and spins with it. The two caps and the pointer stay still between your thumb and finger.</p>
     <table class="parts">${rows}<tr><td><i style="background:#ffe9a8"></i>${I.leds.length} × WS2812B LEDs under white windows</td><td>${(I.leds.length * 0.4).toFixed(1)} g</td></tr>
-    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 × M2 × 8 screws${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
+    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 M2 × 4 brass heat-set inserts in the bosses and 3 M2 × 6 flat-head screws through the lid${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
     <h4 style="margin-top:10px">Balance</h4>
     <p>The parts are placed so the heavy ones oppose each other: ${b.raw.toFixed(1)} g·mm off centre${bbText}. That leftover is like ${((b.n ? b.residual : b.raw) / 38).toFixed(2)} g at the rim. Real parts weigh a little differently, so weigh them and add or remove a BB if it wobbles.</p>
     <h4>Charging</h4><p>USB-C in the rim, straight into the XIAO board, which charges the battery. Micro-USB boards work too but are bigger; USB-C is the current standard.</p>

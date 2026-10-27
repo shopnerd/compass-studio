@@ -17,7 +17,13 @@ export const SPIN_PARTS = {
   bearing: { label: '608ZZ bearing 8 × 22 × 7', od: 22, bore: 8, w: 7, g: 12 },
   magnet:  { label: 'Neodymium magnet 3 × 1.5 mm, south pole down', d: 3.17, h: 1.59 },
   bb:      { label: 'Steel BB 4.5 mm (balance weight)', d: 4.5, g: 0.37 },
-  screw:   { label: 'M2 × 8 countersunk screw' },
+  screw:   { label: 'M2 × 6 flat head machine screw' },
+};
+// Lid screws go into brass heat-set inserts in the tray bosses. ruthex RX-M2x4 numbers (the same as Box Studio's M2):
+// printed hole 3.2, insert 4.0 long, knurl 3.6, min wall 1.3; the lid gets a 2.4 clearance hole and a 90° countersink
+// for the 4.0 flat head. Screw M2 × 6: 2.4 lid + 4.0 insert, tip 0.4 short of the insert's end.
+export const INSERT = { name: 'M2 × 4 brass heat-set insert', hole: 3.2, len: 4.0, knurl: 3.6, wall: 1.6, clear: 2.4, head: 4.0, screwLen: 6, chamfer: 0.4,
+  get bossR() { return this.hole / 2 + this.wall; }, get depth() { return this.len + 1; },
 };
 // Choices the panel offers. Each entry overrides the matching SPIN_PARTS entry.
 export const CHOICES = {
@@ -184,10 +190,10 @@ export function spinLayout(S, quick = false, coarse = false) {
   for (let a = 0; a < 360; a += 2.5) {
     const offB = Math.abs((a % 45) - 22.5);                                   // distance to the nearest segment centre
     if (offB > 11) continue;
-    const bp = { shape: 'circle', d: 6.6, angle: a, r: rs };
+    const bp = { shape: 'circle', d: 2 * INSERT.bossR + 0.2, angle: a, r: rs };
     if (cavityParts.some(p => samples(bp).some(pt => inside(p, pt)) || samples(p).some(pt => inside(bp, pt)))) continue;
     if (best.n && best.slots.some(b => { const sl = slotOf(b); return samples(bp).some(pt => inside(sl, pt)) || samples(sl).some(pt => inside(bp, pt)); })) continue;
-    { const q = P2(rs, a); if (leds.some(l => { const c = P2(l.r, l.angle); return Math.hypot(c[0] - q[0], c[1] - q[1]) < SPIN_PARTS.led.d / 2 + 0.3 + 3.1 + 0.4; })) continue; }   // boss vs LED boards under the lid
+    { const q = P2(rs, a); if (leds.some(l => { const c = P2(l.r, l.angle); return Math.hypot(c[0] - q[0], c[1] - q[1]) < SPIN_PARTS.led.d / 2 + 0.3 + INSERT.bossR + 0.4; })) continue; }   // boss vs LED boards under the lid
     free.push(a);
   }
   let screws = [], bestGap = 0;
@@ -260,9 +266,12 @@ export function buildSpinner(K, S0) {
     guides.push(ext(rectCS(sl, 0).subtract(rectCS({ ...sl, radial: sl.radial - 1.8, tang: sl.tang - 1.8 }, 0)), 4.0, floor));
   }
   const rs = rOut - 2.8;
-  for (const a of L.screws) guides.push(cyl(zLid - floor, 3.1, floor, 32, ...at(rs, a)));
+  for (const a of L.screws) guides.push(cyl(zLid - floor, INSERT.bossR, floor, 40, ...at(rs, a)));
   tray = tray.add(unionM(guides));
-  for (const a of L.screws) tray = tray.subtract(cyl(8.2, 0.8, zLid - 8.1, 24, ...at(rs, a)));             // M2 pilot holes
+  for (const a of L.screws) {   // heat-set insert holes: Ø3.2, insert length + 1 deep for the melt, 0.4 lead-in chamfer
+    tray = tray.subtract(cyl(INSERT.depth + 0.01, INSERT.hole / 2, zLid - INSERT.depth, 32, ...at(rs, a)));
+    tray = tray.subtract(Manifold.cylinder(INSERT.chamfer + 0.01, INSERT.hole / 2, INSERT.hole / 2 + INSERT.chamfer, 32).translate([...at(rs, a), zLid - INSERT.chamfer]));
+  }
   // USB-C through the rim at the board, with a recess for the plug's overmould
   const brd = L.parts.find(p => p.key === 'board');
   if (brd) {
@@ -296,14 +305,15 @@ export function buildSpinner(K, S0) {
   goldCS = goldCS.subtract(dividers.offset(0.3, 'Round', 2, 8)).subtract(ledWin.offset(1.0, 'Round', 2, 16)).subtract(labelCS.offset(0.6, 'Round', 2, 8));
   goldCS = unionCS([goldCS, arrow]);
   const whiteTop = unionCS([dividers, labelCS]).subtract(arrow.offset(0.6, 'Round', 2, 8));
-  const screwCS = unionCS(L.screws.map(a => CrossSection.circle(1.15, 24).translate(at(rs, a))));
+  const screwCS = unionCS(L.screws.map(a => CrossSection.circle(INSERT.clear / 2, 24).translate(at(rs, a))));
   let lidM = ext(disk(R, 192).subtract(disk(wellR + 0.3, 96)), lid, zLid);
   // LED pockets underneath, diffuser windows above them (white, filled flush)
   const ledPocket = ext(unionCS(L.leds.map(l => CrossSection.circle(5.3, 40).translate(at(l.r, l.angle)))), 1.6, zLid - 0.01);
   const ledDiff = ext(ledWin, lid - 1.6 + 0.01, zLid + 1.6 - 0.01);
   const whiteM = unionM([ext(whiteTop, 1.0, H - 1.0), ledDiff]);
   const goldM = ext(goldCS, 0.6, H - 0.6);
-  const csinks = unionM(L.screws.map(a => Manifold.cylinder(1.25, 1.15, 2.0, 24).translate([...at(rs, a), H - 1.24])));
+  const csH = (INSERT.head + 0.2 - INSERT.clear) / 2;   // 90°: the cone drops as much as it narrows
+  const csinks = unionM(L.screws.map(a => Manifold.cylinder(csH + 0.01, INSERT.clear / 2, INSERT.head / 2 + 0.1, 32).translate([...at(rs, a), H - csH])));
   lidM = lidM.subtract(ledPocket).subtract(ext(screwCS, lid + 0.2, zLid - 0.1)).subtract(csinks);
   // the lid's alignment lip into the cavity
   lidM = lidM.add(ext(disk(rOut - 0.15, 160).subtract(disk(rOut - 1.3, 160)).subtract(screwCS.offset(2.2, 'Round', 2, 16)), 1.5, zLid - 1.5));

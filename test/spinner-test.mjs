@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
 import { createKit, meshToSTL } from '../core.js';
-import { buildSpinner, spinLayout, SPIN_DEFAULTS } from '../spinner.js';
+import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT } from '../spinner.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fb = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -26,6 +26,18 @@ function run(S, label) {
     const v = solids[names[i]].intersect(solids[names[j]]).volume(); if (v > 0.01) fail(`${label}: ${names[i]} ∩ ${names[j]} = ${v.toFixed(3)} mm³`);
   }
   const L = sp.L, bal = L.balance;
+  { // heat-set inserts: wall round the knurl, screw reaches into the insert but not past it, insert hole is really there
+    const knurlWall = INSERT.bossR - INSERT.knurl / 2, grip = INSERT.screwLen - sp.S.lid, rs = L.rOut - 2.8;
+    if (knurlWall < 1.3) fail(`${label}: only ${knurlWall.toFixed(2)} mm of plastic round the insert knurl (ruthex wants 1.3)`);
+    if (grip < 2.5 || grip > INSERT.len) fail(`${label}: M2 × ${INSERT.screwLen} engages ${grip.toFixed(1)} mm of a ${INSERT.len} mm insert`);
+    for (const a of L.screws) {
+      const [x, y] = [rs * Math.sin(a * Math.PI / 180), rs * Math.cos(a * Math.PI / 180)], zL = sp.assembly.zLid;
+      const probe = K.Manifold.cylinder(INSERT.len - 0.2, INSERT.hole / 2 - 0.1, INSERT.hole / 2 - 0.1, 24).translate([x, y, zL - INSERT.len + 0.1]);
+      if (P.tray.intersect(probe).volume() > 0.01) fail(`${label}: insert hole at ${a}° is blocked`);
+      const ring = K.Manifold.cylinder(INSERT.len - INSERT.chamfer - 0.1, INSERT.bossR - 0.2, INSERT.bossR - 0.2, 32).translate([x, y, zL - INSERT.len]).subtract(K.Manifold.cylinder(INSERT.len + 1, INSERT.hole / 2 + 0.1, INSERT.hole / 2 + 0.1, 32).translate([x, y, zL - INSERT.len - 0.5]));   // ring stops below the lead-in chamfer
+      { const gap = ring.subtract(P.tray); if (gap.volume() > 0.01) { const bb = gap.boundingBox(); fail(`${label}: boss wall at ${a}° has a gap of ${gap.volume().toFixed(3)} mm³ at z ${(+bb.min[2]).toFixed(2)}–${(+bb.max[2]).toFixed(2)}, r ${Math.hypot(bb.min[0], bb.min[1]).toFixed(1)}`); } }
+    }
+  }
   { // walls round the hub: finger wells to cavity, hall pocket to bearing and to cavity
     const hall = L.parts.find(p => p.key === 'hall'), Sx = L.S, half = (hall.radial + 0.4) / 2;
     const walls = { well: L.rIn - Sx.wellR, hallBore: hall.r - half - Sx.boreR, hallCavity: L.rIn - (hall.r + half) };
