@@ -57,6 +57,9 @@ export function compassPrint(P) {
   return c;
 }
 export const NEEDLE_PRINT = [[0, 0, 6], [0, 10, 3.6], [0, -10, 3.6], [0, 16, 2.4], [0, -16, 2.4], [0, 21.5, 1.3], [0, -21.5, 1.3]];
+export const LIGHT = { hubT: 3.8, armT: 2.6, leds: [9, 12, 15, 18, 21] };
+export const LIGHT_PRINT = [[0, 0, 8.6], [0, 10, 2.6], [0, 15, 2.6], [0, 20, 2.6], [0, 23.5, 1.9], [0, 25.6, 0.9], [0, -9, 4.6], [0, -14, 4.6], [0, -18.5, 4.6]];
+export const needlePrint = (P) => P.centre === 'light' ? LIGHT_PRINT : NEEDLE_PRINT;
 const rot = (c, a) => { const s = Math.sin(a), k = Math.cos(a); return [c[0] * k - c[1] * s, c[0] * s + c[1] * k, c[2]]; };
 const place = (fp, x, y, a) => fp.map(c => { const r = rot(c, a); return [r[0] + x, r[1] + y, r[2]]; });
 const hits = (A, B, gap) => { for (const a of A) for (const b of B) if (Math.hypot(a[0] - b[0], a[1] - b[1]) < a[2] + b[2] + gap - 1e-6) return true; return false; };
@@ -102,7 +105,7 @@ export function packBed(P, opts = {}) {
   if (P.centre !== 'fixed' && opts.needles !== false) {
     const taken = best.items.map(it => it.C);
     for (let y = m; y < bh - m && needles.length < best.n; y += 2) for (let x = m; x < bw - m && needles.length < best.n; x += 2) for (const ang of [0, Math.PI / 2, Math.PI / 3, 2 * Math.PI / 3, Math.PI / 6, 5 * Math.PI / 6]) {
-      const C = place(NEEDLE_PRINT, x, y, ang);
+      const C = place(needlePrint(P), x, y, ang);
       if (!inBed(C, m, m, bw - m, bh - m) || hitsRect(C, best.tower, g) || taken.some(T => hits(C, T, g))) continue;
       needles.push({ x, y, ang }); taken.push(C); break;
     }
@@ -254,6 +257,7 @@ export function createKit(wasm, font) {
     const extras = [];
     if (P.centre === 'needle') extras.push(needle(P));
     if (P.centre === 'light') extras.push(lightNeedle(P));
+    if (P.centre !== 'fixed') { const tip = P.centre === 'light' ? 27 : 25; if (tip > d.Rd - 0.8) warn.push(`The ${P.centre === 'light' ? 'light ' : ''}needle (tip ${tip} mm) needs the dish to be at least Ø${(2 * (tip + 0.8)).toFixed(0)}; make the compass bigger`); }
     if (P.nfc === 'sticker' && P.back === 'seal') warn.push('The seal runs close to the NFC recess; check the back view');
     return { groups, extras, warn, pause, vals, d };
   }
@@ -269,18 +273,25 @@ export function createKit(wasm, font) {
     let m = Manifold.extrude(flat, 2).add(cyl(0.6, 3.6, 2, 48)).add(cyl(3.8, P.pinD / 2, 2.6, 48));
     return { kind: 'needle', label: 'needle', groups: { needle: m } };
   }
-  // The light needle (persistence of vision): thicker hub with a CR1220 cell, five 1.8 mm LEDs down the north arm,
-  // a pocket for a tiny controller board in the south arm, a wire groove on the underside. Spin it and the LEDs draw rings.
+  // The light needle (persistence of vision). Printed face down like the plain needle, then flipped onto the bearing.
+  // Hub: a CR1220 cell slides in sideways through a slot (east side) between a 0.8 mm face skin and a 0.8 mm floor;
+  // the collar and pin stand on that floor. North arm: straight-sided, five pre-wired 0603 micro LEDs in pockets on the
+  // underside shine through 1.1 mm windows in the face. South tail: pocket for a controller board up to 6.4 x 9.4 mm.
+  // Wire grooves run on the underside from the cell to the LEDs and to the board.
   function lightNeedle(P) {
-    const t = 4.2;
-    const arms = CrossSection.union([mk([[[0, 26], [-3.2, 6], [3.2, 6]]]), mk([[[0, -24], [5.5, -6], [-5.5, -6]]]), disk(8, 64)]);
-    let m = Manifold.extrude(arms, t);
-    m = m.subtract(cyl(2.3, 6.35, t - 2.3, 64));                                               // CR1220 (12.5 × 2.0), opens on the pin side
-    m = m.subtract(unionM([0, 1, 2, 3, 4].map(k => cyl(t + 1, 0.95, -0.5, 24, 0, 10 + k * 3.3))));   // LED holes, light out through the printed face
-    m = m.subtract(Manifold.cube([1.4, 17, 1.2]).translate([-0.7, 6, t - 1.2]));             // wire groove
-    m = m.subtract(Manifold.cube([6.4, 9.4, 1.6]).translate([-3.2, -17.5, t - 1.6]));         // controller board pocket
-    m = m.subtract(cyl(t + 1, P.pinD / 2 + 0.5, -0.5, 48)).add(cyl(t, P.pinD / 2 + 2.2, 0, 48).subtract(cyl(t + 1, P.pinD / 2 - 0.01, -0.5, 48)));
-    m = m.add(cyl(0.6, 3.6, t, 48)).add(cyl(3.8, P.pinD / 2, t + 0.6, 48));
+    const hubT = LIGHT.hubT, armT = LIGHT.armT, hubR = 8.5;
+    const north = mk([[[-2.5, 0], [2.5, 0], [2.5, 21.6], [0, 27], [-2.5, 21.6]]]);
+    const tail = CrossSection.hull([CrossSection.square([9, 1]).translate([-4.5, -1]), CrossSection.circle(4.5, 64).translate([0, -18.5])]);
+    let m = ext(CrossSection.union([north, tail]), armT, 0).add(cyl(hubT, hubR, 0, 96));
+    const box = (x0, x1, y0, y1, z0, z1) => Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0]);
+    const cuts = [
+      cyl(2.2, 6.4, 0.8, 96), box(0, hubR + 1, -6.4, 6.4, 0.8, 3.0),                 // cell pocket + slide-in slot
+      box(0.45, 1.35, 5.5, 22, 1.6, 2.7), box(-0.7, 0.7, -9.6, -5.5, 1.6, 2.7),     // wire grooves (tunnel through the hub wall)
+      box(-3.2, 3.2, -18.9, -9.3, 1.0, armT + 0.1),                                  // controller board pocket
+    ];
+    for (const y of LIGHT.leds) cuts.push(cyl(1.0, 0.55, -0.1, 24, 0, y), box(-0.55, 0.55, y - 0.95, y + 0.95, 0.6, armT + 0.1));
+    m = m.subtract(unionM(cuts));
+    m = m.add(cyl(0.6, 3.6, hubT, 48)).add(cyl(3.8, P.pinD / 2, hubT + 0.6, 48));
     return { kind: 'light', label: 'light needle', groups: { needle: m } };
   }
   // Fitment coupons (the original fitmenttester.py as one plate): five bore sizes around the chosen one, five pin sizes.

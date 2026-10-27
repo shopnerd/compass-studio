@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
-import { createKit, DEFAULTS, PRINTERS, packBed, scaleSweep, swapEstimate, build3MF, zipFiles, meshToSTL, transformMesh } from '../core.js';
+import { createKit, LIGHT, DEFAULTS, PRINTERS, packBed, scaleSweep, swapEstimate, build3MF, zipFiles, meshToSTL, transformMesh } from '../core.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const buf = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -71,6 +71,19 @@ if (out) {
   const parts = build3MF(objs.slice(0, 1).map(o => ({ ...o, x: 0, y: 0, ang: 0 })));
   writeFileSync(join(out, 'one.model'), parts[2][1]);
   console.log(`wrote ${out}: bed.3mf ${(zip.length / 1e6).toFixed(2)} MB, ${objs.length} objects`);
+}
+// Light needle: one piece, and the cell, LEDs and board sit in their pockets without touching plastic
+{
+  const { Manifold } = K, m = K.lightNeedle(DEFAULTS).groups.needle;
+  const box = (x0, x1, y0, y1, z0, z1) => Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0]);
+  const cell = Manifold.cylinder(2.0, 6.25, 6.25, 96).translate([0, 0, 0.9]);
+  const clash = { cell: m.intersect(cell).volume(), board: m.intersect(box(-3, 3, -18.7, -9.5, 1.1, 2.6)).volume(),
+    leds: LIGHT.leds.reduce((a, y) => a + m.intersect(box(-0.4, 0.4, y - 0.8, y + 0.8, 0.7, 1.3)).volume(), 0),
+    slideOut: m.intersect(box(0, 20, -6.25, 6.25, 0.9, 2.9)).volume() };
+  const pieces = m.decompose().length, bb = m.boundingBox();
+  const ok = pieces === 1 && Object.values(clash).every(v => v < 1e-3) && bb.max[1] <= 27.01 && bb.min[1] >= -23.01;
+  console.log(`light needle: ${pieces} piece(s), clashes ${JSON.stringify(Object.fromEntries(Object.entries(clash).map(([k, v]) => [k, +v.toFixed(4)])))}, y ${bb.min[1].toFixed(1)}..${bb.max[1].toFixed(1)}, ${m.volume().toFixed(0)} mm³ ${ok ? 'ok' : 'FAIL'}`);
+  if (!ok) fails++;
 }
 console.log(fails ? `${fails} FAILURES` : 'all compass checks passed');
 process.exit(fails ? 1 : 0);

@@ -1,7 +1,7 @@
 // app.js — UI + three.js viewer. The worker does all geometry.
 import * as THREE from 'three';
 import { makeOrbit } from './orbit.js';
-import { DEFAULTS, FILAMENTS, compassPrint, NEEDLE_PRINT } from './core.js';
+import { DEFAULTS, FILAMENTS, compassPrint, needlePrint, LIGHT } from './core.js';
 import { mountPlay } from './play.js';
 import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
 import { mountVoice } from './voice-ui.js';
@@ -72,11 +72,15 @@ function showCompass(res) {
     group.add(m);
   }
   if (one.extras.length) {
-    const e = one.extras[0], t = e.kind === 'light' ? 4.2 : 2;
+    const e = one.extras[0], t = e.kind === 'light' ? LIGHT.hubT : 2;
     // installed: flipped over, ledge on the bearing's inner race at the dish floor
     const n = new THREE.Mesh(geo(e.meshes.needle), mat('needle'));
     n.rotation.x = Math.PI; n.position.z = d.dishZ + t + 0.6 + (ex ? 34 : 0.05);
     group.add(n);
+    if (e.kind === 'light') for (const y of LIGHT.leds) {   // the LEDs, lit, in their face windows (the flip sends north to -y)
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.3, 16), mat('light')); l.rotation.x = Math.PI / 2;
+      l.position.set(0, -y, n.position.z + 0.1); group.add(l);
+    }
     const bearing = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6.5, 4, 48, 1, true), mat('bearing'));
     bearing.rotation.x = Math.PI / 2; bearing.position.z = d.dishZ - 2 + (ex ? 8 : 0); if (ex) group.add(bearing);
   }
@@ -127,7 +131,7 @@ function drawBed() {
     const [X, Y] = P(it.x, it.y); x.fillStyle = FILAMENTS.gold; x.beginPath(); x.arc(X, Y, 21 * p.scale * k, 0, 7); x.fill();
     x.fillStyle = '#fff'; x.font = `600 ${Math.max(11, 14 * k)}px system-ui`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(i + 1), X, Y); x.textAlign = 'start'; x.textBaseline = 'alphabetic';
   });
-  b.needles.forEach(n => outline(NEEDLE_PRINT, n.x, n.y, n.ang, '#7d1a20'));
+  b.needles.forEach(n => outline(needlePrint(p), n.x, n.y, n.ang, '#7d1a20'));
   x.fillStyle = muted; x.font = '12px system-ui';
   x.fillText(`${b.printer}: ${bw} × ${bh} mm · ${b.n} compasses${b.needles.length ? ` + ${b.needles.length} needles` : ''} · 50 mm grid · front edge at the bottom`, ox, oy + bh * k + 18);
 }
@@ -171,7 +175,7 @@ function render(res, p) {
 function insideInfo(p, one, d) {
   const parts = [];
   if (p.centre === 'needle') parts.push(`<h4>Spinning needle</h4><ul><li>695ZZ bearing, 5 × 13 × 4 mm. Clamp it into the pocket until flush.</li><li>Clamp the needle's pin into the bearing; the ledge keeps it clear of the outer race.</li><li>Pocket r ${p.boreR.toFixed(2)} and pin Ø${p.pinD.toFixed(2)}: print the fitment test plate first if the filament or printer changed.</li></ul>`);
-  if (p.centre === 'light') parts.push(`<h4>Light needle (persistence of vision)</h4><p>Five LEDs flash in a timed pattern; spinning the needle smears them into rings and shapes, like an LED fidget spinner.</p><ul><li>CR1220 coin cell in the hub (pocket on the pin side)</li><li>5 × 1.8 mm LEDs through the north arm, wires in the groove underneath</li><li>Controller up to 6 × 9 mm in the south arm pocket (an ATtiny10 or CH32V003 board)</li><li>Same 695 bearing and pin as the plain needle. Wiring and firmware are not part of this file.</li></ul>`);
+  if (p.centre === 'light') parts.push(`<h4>Light needle (persistence of vision)</h4><p>Five LEDs flash in a timed pattern; spinning the needle smears them into rings and shapes, like an LED fidget spinner.</p><ul><li>CR1220 coin cell slides into the hub through the slot on one side; copper tape on each face of the cell for contacts, a strip of Kapton tape closes the slot</li><li>5 pre-wired 0603 micro LEDs (the model-railway kind, with enamelled leads) drop into the pockets under the long arm and shine through the 1.1 mm windows</li><li>Controller board up to 6.4 × 9.4 mm in the tail pocket (an ATtiny10 or CH32V003 board); wires run in the grooves underneath</li><li>Same 695 bearing and pin as the plain needle. The hub stands 1.8 mm above the rim.</li><li>Wiring and firmware are not part of this file; nothing here has been built yet.</li></ul>`);
   if (p.centre === 'fixed') parts.push('<h4>No needle</h4><p>Solid centre, nothing to assemble.</p>');
   if (p.nfc === 'sticker') parts.push('<h4>NFC sticker</h4><p>Ø10 mm NTAG213 sticker in the 0.4 mm recess on the back, under the loop. Program it with the student\'s page before sticking it down.</p>');
   if (p.nfc === 'embedded') parts.push(`<h4>NFC sealed inside</h4><p>In PrusaSlicer add a pause at <b>${one.pause} mm</b>, drop a Ø10 × 0.6 mm tag into each pocket, resume. The tag sits under the ring, away from the steel bearing.</p>`);
