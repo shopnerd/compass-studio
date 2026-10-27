@@ -1,6 +1,6 @@
 // app.js — UI + three.js viewer. The worker does all geometry.
 import * as THREE from 'three';
-import { OrbitControls } from './vendor/OrbitControls.js';
+import { makeOrbit } from './orbit.js';
 import { DEFAULTS, FILAMENTS, compassPrint, NEEDLE_PRINT } from './core.js';
 import { mountPlay } from './play.js';
 import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
@@ -46,8 +46,8 @@ renderer.setPixelRatio(Math.min(2, devicePixelRatio));
 view.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 1, 2000);
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+const controls = makeOrbit(camera, renderer.domElement, () => draw());
+if (location.search.includes('debug')) window.__view = { camera, controls };
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(60, -80, 160); scene.add(sun);
 const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(-80, 90, -60); scene.add(rim);
@@ -87,12 +87,11 @@ function frame() {
   fitK = Math.max(1, 1.3 / camera.aspect);
   const R = (model === 'spin' ? (spinLast ? spinLast.info.R : 41) : 37.5 * +$('scale').value) * fitK;
   controls.target.set(0, 3, 3);
-  if (mode === 'top') camera.position.set(0, 0.01, R * 4.4);
-  else if (mode === 'back') camera.position.set(0, 0.01, -R * 4.4);
-  else if (mode === 'explode') camera.position.set(R * 2.2, -R * 3.2, R * 2.6);
-  else camera.position.set(R * 1.6, -R * 2.6, R * 2.7);
-  camera.up.set(0, 0, 1); if (mode === 'top' || mode === 'back') camera.up.set(0, 1, 0);
-  controls.update(); draw();
+  const t = controls.target, V = (x, y, z) => new THREE.Vector3(t.x + x, t.y + y, t.z + z);
+  if (mode === 'top') controls.set(V(0, 0, R * 4.4), new THREE.Vector3(0, 1, 0));
+  else if (mode === 'back') controls.set(V(0, 0, -R * 4.4), new THREE.Vector3(0, 1, 0));
+  else if (mode === 'explode') controls.set(V(R * 2.2, -R * 3.2, R * 2.6), new THREE.Vector3(0, 0, 1));
+  else controls.set(V(R * 1.6, -R * 2.6, R * 2.7), new THREE.Vector3(0, 0, 1));
 }
 function size() {
   const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false);
@@ -101,8 +100,6 @@ function size() {
   drawBed(); draw();
 }
 let raf = 0; function draw() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderer.render(scene, camera); }); }
-controls.addEventListener('change', draw);
-(function loop() { controls.update(); requestAnimationFrame(loop); })();
 new ResizeObserver(size).observe(view);
 
 // ---------------------------------------------------------------- bed drawing
