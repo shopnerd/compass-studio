@@ -57,7 +57,8 @@ export function spinBom(S, info, grams, qty = 1) {
   add(CATALOG.resistor, 2);
   add(CATALOG.bearing, 1, 'Hardware'); add(CATALOG.magnet, 1, 'Hardware');
   if (info.balance.n) add(CATALOG.bb, info.balance.n, 'Hardware');
-  add(CATALOG.insert, 4, 'Hardware'); add(CATALOG.screw, 4, 'Hardware');   // 3 for the lid + 1 clamping the caps through the bearing add(CATALOG.wire, 1, 'Hardware'); add(CATALOG.ca, 1, 'Hardware');
+  add(CATALOG.insert, 3, 'Hardware'); add(CATALOG.screw, 3, 'Hardware');   // the lid's 3 screws; the caps press onto a printed pin
+  add(CATALOG.wire, 1, 'Hardware'); add(CATALOG.ca, 1, 'Hardware');
   // filament: one spool per colour covers far more than a few spinners, so the order line is what you use
   for (const [k, g] of Object.entries(grams)) {
     const gr = g * FILAMENT.fill;

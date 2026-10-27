@@ -273,23 +273,19 @@ function showSpin(res) {
     addMesh(M.lid, 'body', m => { m.position.z = ex ? 40 : 0; });
     addMesh(M.white, 'white', m => { m.position.z = ex ? 48 : 0; });
     addMesh(M.gold, 'gold', m => { m.position.z = ex ? 44 : 0; });
-    addMesh(M.capTop, 'needle', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
+    addMesh(M.cap, 'needle', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });   // top cap
     addMesh(M.capPtr, 'white', m => { m.position.z = A.zTopCap + (ex ? 64 : 0); });
   }
-  addMesh(M.capBot, 'needle', m => { m.position.z = A.zBotCap - (ex ? 18 : 0); });   // peg up into the bearing
-  if (A.capJ && res.info.insert) {   // the cap clamp: insert in the bottom peg's tip, M2 flat-head down through the top cap
-    const J = A.capJ, ins = res.info.insert;
-    const iv = insertModel(ins.len, ins.knurl); iv.position.z = A.zBotCap + A.capT - 1 + 0.5 + J.botPeg - (ex ? 18 : 0); group.add(iv);
-    if (!inside) { const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.position.z = A.zTopCap + A.capT - J.cb + (ex ? 76 : 0); group.add(sc); }
-  }
-  if (M.button && !inside) addMesh(M.button, 'white', m => { m.position.z = A.zButton + (ex ? 84 : 0); });   // press-in button over the cap screw
-  addMesh(M.dome, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zB0 - 0.5 - 2 - (ex ? 26 : 0); });
+  // the bottom cap is the same part flipped over; the pin runs through the bearing into both sockets
+  addMesh(M.cap, 'needle', m => { m.rotation.x = Math.PI; m.position.z = A.zBotCap - (ex ? 26 : 0); });
+  addMesh(M.capPtr, 'white', m => { m.rotation.x = Math.PI; m.position.z = A.zBotCap - (ex ? 26 : 0); });
+  addMesh(M.pin, 'needle', m => { m.position.z = A.zPin + (ex ? 22 : 0); });
   const bear = bearingMesh(22, 8, 7); bear.position.z = A.zB0 + 3.5 + (ex ? 12 : 0); group.add(bear);
   if (inside || ex || xr) {   // the electronics, drawn as the real parts
     const lift = ex ? 12 : 0, I = res.info, rad = d => d * Math.PI / 180;
     for (const p of I.parts) {
       const o = partModel(p, I), a = rad(p.angle);
-      const z0 = p.inHub ? A.zB0 + 7 - 0.6 - 0.9 - p.h / 2 : I.floor + 0.05;
+      const z0 = p.inHub ? A.zHall - p.h / 2 : I.floor + 0.05;
       o.rotation.z = -a; o.position.set(p.r * Math.sin(a), p.r * Math.cos(a), z0 + (p.inHub ? 0 : lift)); group.add(o);
     }
     for (const l of I.leds) {   // round WS2812B boards, chip up in the lid pockets
@@ -297,7 +293,7 @@ function showSpin(res) {
       o.position.set(l.r * Math.sin(a), l.r * Math.cos(a), A.zLid - 1.0 + (ex ? 28 : 0)); group.add(o);
     }
     const hl = I.parts.find(p => p.key === 'hall');
-    if (hl && !inside) { const m = magnetModel(); m.position.set(0, hl.r, A.zTopCap + (ex ? 58 : 0)); group.add(m); }   // in the top cap, over the hall sensor
+    if (hl && !inside) { const m = magnetModel(); m.position.set(0, 12.3, A.zTopCap + (ex ? 58 : 0)); group.add(m); }   // in the top cap's pocket, over the hall sensor
     if (I.rScrew && I.insert) for (const sa of I.screws) {   // brass inserts flush in the bosses; M2 flat-head screws through the lid's countersinks
       const a = rad(sa), x = I.rScrew * Math.sin(a), y = I.rScrew * Math.cos(a), ins = I.insert;
       const iv = insertModel(ins.len, ins.knurl); iv.position.set(x, y, A.zLid + (ex ? 8 : 0)); group.add(iv);
@@ -323,7 +319,7 @@ function renderSpin(res) {
   $('spInside').innerHTML = `
     <p>Everything rides in the disc and spins with it. The two caps and the pointer stay still between your thumb and finger.</p>
     <table class="parts">${rows}<tr><td><i style="background:#ffe9a8"></i>${I.leds.length} × WS2812B LEDs under white windows</td><td>${(I.leds.length * 0.4).toFixed(1)} g</td></tr>
-    <tr><td>608 bearing, 2 caps, Ø3 magnet in the top cap, 3 4 M2 × 4 brass heat-set inserts and 4 M2 × 6 flat-head screws (3 hold the lid, 1 clamps the caps through the bearing)${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
+    <tr><td>608 bearing, 2 matching press-on caps and a printed pin, Ø3 magnet in the top cap, 3 M2 × 4 brass heat-set inserts and 3 M2 × 6 flat-head screws holding the lid${b.n ? `, ${b.n} steel BB${b.n > 1 ? 's' : ''}` : ''}</td><td></td></tr></table>
     <h4 style="margin-top:10px">Balance</h4>
     <p>The parts are placed so the heavy ones oppose each other: ${b.raw.toFixed(1)} g·mm off centre${bbText}. That leftover is like ${((b.n ? b.residual : b.raw) / 38).toFixed(2)} g at the rim. Real parts weigh a little differently, so weigh them and add or remove a BB if it wobbles.</p>
     <h4>Charging</h4><p>USB-C in the rim, straight into the XIAO board, which charges the battery. Micro-USB boards work too but are bigger; USB-C is the current standard.</p>
@@ -342,12 +338,12 @@ function drawSpinBed() {
   const css = getComputedStyle(document.documentElement), P = (px, py) => [ox + px * k, oy + (bh - py) * k];
   x.fillStyle = css.getPropertyValue('--panel').trim(); x.strokeStyle = css.getPropertyValue('--muted').trim(); x.fillRect(ox, oy, bw * k, bh * k); x.strokeRect(ox, oy, bw * k, bh * k);
   const t = b.tower; x.globalAlpha = 0.35; x.fillStyle = css.getPropertyValue('--muted').trim(); x.fillRect(...P(t[0], t[1] + t[3]), t[2] * k, t[3] * k); x.globalAlpha = 1;
-  const col = { tray: FILAMENTS.body, lid: FILAMENTS.gold, capTop: '#7d1a20', capBot: '#7d1a20', dome: FILAMENTS.white, button: FILAMENTS.white };
-  const name = { tray: 'tray', lid: 'lid (face down)', capTop: 'top cap', capBot: 'cap', dome: 'dome', button: '' };
+  const col = { tray: FILAMENTS.body, lid: FILAMENTS.gold, cap: '#7d1a20', pin: '#7d1a20' };
+  const name = { tray: 'tray', lid: 'lid (face down)', cap: 'cap', pin: '' };
   for (const it of b.items) {
     const [X, Y] = P(it.x, it.y); x.fillStyle = col[it.part]; x.beginPath(); x.arc(X, Y, it.r * k, 0, 7); x.fill();
-    x.fillStyle = it.part === 'dome' || it.part === 'button' || it.part === 'lid' ? '#222' : '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `600 ${Math.max(10, 11 * k)}px system-ui`;
-    x.fillText(it.r > 20 ? `${name[it.part]} ${it.kit + 1}` : String(it.kit + 1), X, Y);
+    x.fillStyle = it.part === 'lid' ? '#222' : '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `600 ${Math.max(10, 11 * k)}px system-ui`;
+    x.fillText(it.r > 20 ? `${name[it.part]} ${it.kit + 1}` : it.r > 6 ? String(it.kit + 1) : '', X, Y);
   }
   x.textAlign = 'start'; x.textBaseline = 'alphabetic'; x.fillStyle = css.getPropertyValue('--muted').trim(); x.font = '12px system-ui';
   x.fillText(`${b.printer}: ${bw} × ${bh} mm · ${b.k} complete Spin Compass kit${b.k > 1 ? 's' : ''} · wipe tower shaded`, ox, oy + bh * k + 18);

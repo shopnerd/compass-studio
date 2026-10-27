@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
 import { createKit, meshToSTL } from '../core.js';
-import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT, BUTTON } from '../spinner.js';
+import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT, CAP } from '../spinner.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fb = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -18,33 +18,44 @@ function run(S, label) {
   const P = sp.parts;
   for (const [k, m] of Object.entries(P)) if (m && (!K.valid(m) || m.isEmpty())) fail(`${label}: ${k} invalid/empty`);
   // assembled: tray, lid, inlays must not overlap; caps placed on the bearing must not touch tray or lid
-  const { zTopCap, zB0 } = sp.assembly;
-  const capTop = P.capTop.translate([0, 0, zTopCap]), capBot = P.capBot.translate([0, 0, sp.assembly.zBotCap]);
+  const A = sp.assembly, { zTopCap, zB0 } = A, Mf = K.Manifold;
+  const capFull = P.cap.add(P.capPtr), capTop = capFull.translate([0, 0, zTopCap]), capBot = capFull.rotate([180, 0, 0]).translate([0, 0, A.zBotCap]);
+  const pin = P.pin.translate([0, 0, A.zPin]);
   const solids = { tray: P.tray, lid: P.lid, white: P.white, gold: P.gold, capTop, capBot };
   const names = Object.keys(solids);
   for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
     const v = solids[names[i]].intersect(solids[names[j]]).volume(); if (v > 0.01) fail(`${label}: ${names[i]} ∩ ${names[j]} = ${v.toFixed(3)} mm³`);
   }
-  { // cap clamp: pegs really in the bore, not touching each other, screw reaches the insert and stops short of its end
-    const J = sp.assembly.capJ, bore = K.Manifold.cylinder(6.6, 3.9, 3.9, 32).translate([0, 0, zB0 + 0.2]);
-    if (capBot.intersect(bore).volume() < 150) fail(`${label}: bottom cap peg is not in the bearing bore`);
-    if (capTop.intersect(capBot).volume() > 0.001) fail(`${label}: cap pegs touch, so the screw would not clamp the race`);
-    if (J.engage < 2.5 || J.spare < 0.3) fail(`${label}: cap screw grips ${J.engage.toFixed(1)} mm, ${J.spare.toFixed(1)} mm short of the insert end`);
-    if (J.wall < 1.3) fail(`${label}: only ${J.wall.toFixed(2)} mm round the insert in the bottom peg`);
-    const shank = K.Manifold.cylinder(INSERT.screwLen - 1, 0.95, 0.95, 24).translate([0, 0, sp.assembly.zTopCap + sp.assembly.capT - J.cb - INSERT.screwLen]);
-    if (shank.intersect(capTop).volume() > 0.01 || shank.intersect(capBot).volume() > 0.01) fail(`${label}: cap screw path is blocked`);
-    for (const [k, m] of [['tray', P.tray], ['lid', P.lid]]) for (const [c, cm] of [['top cap', capTop], ['bottom cap', capBot]]) if (m.intersect(cm).volume() > 0.01) fail(`${label}: ${c} touches the ${k}`);
-  }
-  { // press-in button: one piece, prints flat, only its ribs grip the cap, clears the screw head, sits proud of the face
-    const A = sp.assembly, btn = P.button.translate([0, 0, A.zButton]), bb = P.button.boundingBox();
-    const grip = btn.intersect(capTop).volume(), headTop = A.zTopCap + A.capT - A.capJ.cb;
-    if (P.button.decompose().length !== 1) fail(`${label}: button is not one piece`);
-    if (Math.abs(bb.min[2]) > 1e-6) fail(`${label}: button does not sit on the bed`);
-    if (grip < 0.02 || grip > 0.6) fail(`${label}: button rib grip ${grip.toFixed(3)} mm³ (expected only the crush ribs)`);
-    if (A.zButton - headTop < 0.05) fail(`${label}: button plug hits the screw head`);
-    const proud = A.zButton + bb.max[2] - (A.zTopCap + A.capT);
-    if (proud < 0.6 || proud > 1.5) fail(`${label}: button stands ${proud.toFixed(2)} mm proud`);
-    if (btn.intersect(P.capPtr.translate([0, 0, A.zTopCap])).volume() > 0.001) fail(`${label}: button covers the pointer`);
+  { // matched caps: one piece each, flat on the bed, the boss is the only thing touching the bearing, ribs grip the pin
+    if (P.cap.decompose().length !== 1) fail(`${label}: cap is not one piece`);
+    const bb = P.cap.boundingBox();
+    if (Math.abs(bb.min[2]) > 1e-6) fail(`${label}: cap does not sit on the bed`);
+    const ring = (r0, r1, z0, h) => Mf.cylinder(h, r1, r1, 96).subtract(Mf.cylinder(h + 2, r0, r0, 96).translate([0, 0, -1])).translate([0, 0, z0]);
+    // bed-side contact: boss (r 4.4–6) and outer rim on the bed, nothing over the bearing's shields and outer ring (r 6.2–11.4)
+    if (P.cap.intersect(ring(6.2, 11.4, 0, 0.4)).volume() > 0.001) fail(`${label}: cap back would rub the bearing's outer ring`);
+    if (P.cap.intersect(ring(4.5, 5.9, 0, 0.2)).volume() < 2) fail(`${label}: cap boss is missing (nothing bears on the inner ring)`);
+    // nothing in the socket but the ribs; pin reaches into both sockets, never bottoms out; grip only through the ribs
+    const grip = pin.intersect(capTop).volume() + pin.intersect(capBot).volume();
+    if (grip < 0.1 || grip > 2) fail(`${label}: pin grip ${grip.toFixed(3)} mm³ (expected only the crush ribs)`);
+    const pb = pin.boundingBox();
+    if (pb.max[2] > zTopCap + CAP.sockD - 0.05 || pb.min[2] < A.zBotCap - CAP.sockD + 0.05) fail(`${label}: pin bottoms out in a socket`);
+    if (pb.max[2] < zTopCap + 1.2 || pb.min[2] > A.zBotCap - 1.2) fail(`${label}: pin barely enters a socket`);
+    // the pin slides through the 608 bore (Ø8) and nothing printed touches it but the caps
+    if (CAP.pinR > 3.99) fail(`${label}: pin too fat for the 608 bore`);
+    for (const [k, m] of [['tray', P.tray], ['lid', P.lid]]) if (m.intersect(pin).volume() > 0.001) fail(`${label}: pin touches the ${k}`);
+    // both caps clear the tray by the hub step: grow each cap 0.4 down/up toward the tray and still no contact
+    const near = capTop.translate([0, 0, -0.4]).add(capBot.translate([0, 0, 0.4]));
+    if (near.intersect(P.tray).subtract(Mf.cylinder(20, 11, 11, 96).translate([0, 0, -2])).volume() > 0.01) fail(`${label}: cap rim is within 0.4 mm of the hub`);
+    // bearing outer ring (r 9.4–11) never touched by a cap
+    const outer = ring(9.4, 11, zB0, 7);
+    if (outer.intersect(capTop).volume() > 0.001 || outer.intersect(capBot).volume() > 0.001) fail(`${label}: a cap touches the bearing's outer ring`);
+    // the hall sensor stays covered by the hub after the step
+    const hallTop = A.zHall + 0.9, hubTop = zB0 + 7 - CAP.step;
+    if (hubTop - hallTop < 0.5) fail(`${label}: only ${(hubTop - hallTop).toFixed(2)} mm over the hall sensor`);
+    // pointer is a real white inlay on the face
+    if (P.capPtr.volume() < 3) fail(`${label}: pointer inlay is nearly empty`);
+    const proud = zTopCap + A.capT - sp.S.H;
+    if (proud < 0.2 || proud > 1.2) fail(`${label}: top cap stands ${proud.toFixed(2)} mm proud of the case`);
   }
   if (P.trayWhite) { // bottom text: a real inlay, flush with the bed side, no overlap with the tray, clear of the grille and the well
     const tw = P.trayWhite, bb = tw.boundingBox();
@@ -90,8 +101,8 @@ if (out) {
   const w = (n, m) => writeFileSync(join(out, n), Buffer.from(meshToSTL([K.toMesh(m)], n)));
   const { zTopCap, zB0 } = sp.assembly;
   w('sp-tray.stl', sp.parts.tray); w('sp-lid.stl', sp.parts.lid); w('sp-white.stl', sp.parts.white); w('sp-gold.stl', sp.parts.gold);
-  w('sp-captop.stl', sp.parts.capTop.translate([0, 0, zTopCap])); w('sp-capptr.stl', sp.parts.capPtr.translate([0, 0, zTopCap]));
-  w('sp-capbot.stl', sp.parts.capBot); w('sp-dome.stl', sp.parts.dome); w('sp-button.stl', sp.parts.button);
+  w('sp-cap.stl', sp.parts.cap); w('sp-capptr.stl', sp.parts.capPtr); w('sp-pin.stl', sp.parts.pin);
+  w('sp-hub-assembled.stl', sp.parts.cap.add(sp.parts.capPtr).translate([0, 0, zTopCap]).add(sp.parts.cap.add(sp.parts.capPtr).rotate([180, 0, 0]).translate([0, 0, sp.assembly.zBotCap])).add(sp.parts.pin.translate([0, 0, sp.assembly.zPin])));
   console.log('wrote STLs to', out);
 }
 console.log(fails ? `${fails} FAILURES` : 'all spinner checks passed');
