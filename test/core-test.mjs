@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
-import { createKit, LIGHT, DEFAULTS, PRINTERS, packBed, scaleSweep, swapEstimate, build3MF, zipFiles, meshToSTL, transformMesh } from '../core.js';
+import { createKit, LIGHT, POCKET_WALL, LEDGE, dims, DEFAULTS, PRINTERS, packBed, scaleSweep, swapEstimate, build3MF, zipFiles, meshToSTL, transformMesh } from '../core.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const buf = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -25,6 +25,13 @@ function checkCompass(P, label) {
     const ov = vol(c.groups[names[i]].intersect(c.groups[names[j]])); if (ov > 0.01) fail(`${label}: ${names[i]} ∩ ${names[j]} = ${ov.toFixed(3)} mm³`);
   }
   for (const e of c.extras) for (const [k, m] of Object.entries(e.groups)) if (!K.valid(m)) fail(`${label}: ${e.label} ${k} invalid`);
+  if (c.d.spins) {   // the bearing pocket: a solid body wall round it, and a floor under it with no hole through to the back
+    const M = K.Manifold, r = P.boreR, z0 = c.d.pocketZ0, top = c.d.dishZ, seg = 96;
+    const wall = M.cylinder(top - z0, r + POCKET_WALL, r + POCKET_WALL, seg).subtract(M.cylinder(top - z0 + 1, r + 0.02, r + 0.02, seg).translate([0, 0, -0.5])).translate([0, 0, z0]);
+    const wallGap = vol(wall) - vol(wall.intersect(c.groups.body)); if (wallGap > 0.5) fail(`${label}: pocket wall is not solid body (${wallGap.toFixed(2)} mm³ missing)`);
+    const floorZ0 = 0.4 + 0.01, floorZ1 = c.d.ledgeZ0 - 0.01, slab = M.cylinder(floorZ1 - floorZ0, r, r, seg).translate([0, 0, floorZ0]);
+    const holes = vol(slab) - vol(slab.intersect(c.groups.body)); if (holes > 0.05) fail(`${label}: floor under the bearing has a hole (${holes.toFixed(2)} mm³ missing)`);
+  }
   const bb = c.groups.body.boundingBox();
   console.log(`${label.padEnd(34)} ${ms.toFixed(0).padStart(5)} ms  ` + names.map(k => `${k} ${vol(c.groups[k]).toFixed(0)}`).join('  ') + `  mm³ | z ${bb.min[2].toFixed(2)}–${bb.max[2].toFixed(2)}` + (c.pause ? ` | pause ${c.pause}` : '') + (c.warn.length ? `\n${' '.repeat(36)}warn: ${c.warn.join(' / ')}` : ''));
   return c;

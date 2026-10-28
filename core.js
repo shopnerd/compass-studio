@@ -7,7 +7,7 @@
 //   body Ø75 × 7.6, raised ring 28.5–37.5 mm radius, centre dish floor at 5.0, keyring loop r4 (hole r2) at y 41.5, loop top 5.0
 //   values: 1 mm inlay at the top, radius 33, letter size 8.2, 0.8 mm tracking, capitals, two longest words N/S
 //   rose: 1 mm gold inlay under the dish floor (4.0–5.0)        SC logo + name: 1 mm inlay on the back (0–1.0), name radius 32
-//   bearing 695ZZ (5×13×4): pocket r 6.51 from 1.0 to 5.0, ledge hole r 5.51 from 0.6 to 1.0
+//   bearing 695ZZ (5×13×4): pocket r 6.51 from 1.0 to 5.0, relief r 5.51 from 0.8 to 1.0 under the inner ring
 //   needle: 50 long, 2 thick, hub r 6, ledge r 3.6 × 0.6, pin Ø5.2 × 3.8        NFC sticker: Ø10.4 × 0.4 recess at y 32 on the back
 import { ROSE, SC_LOGO } from './data/design2025.js';
 import { SEAL } from './data/seal.js';
@@ -42,11 +42,14 @@ export function arrangeValues(vals, measure = (s) => s.length) {
   const [e, w] = measure(s[2]) >= measure(s[3]) ? [s[2], s[3]] : [s[3], s[2]];
   return [s[0], e, s[1], w];       // N E S W
 }
+export const LEDGE = 0.2;          // relief under the bearing's inner ring so it never drags on the floor
+export const POCKET_WALL = 1.2;    // solid body round the bearing pocket: the rose and its white skin stop this far out
+export const BACK_UNDER = 0.4;     // the back inlay is only this deep under the pocket, so the floor stays solid body
 export function dims(P) {
   const s = P.scale, R = 37.5 * s, Rd = 28.5 * s, b = BEARINGS[P.bearing];
   const T = 7.6, dishZ = 5.0, inlay = 1.0;
   return { s, R, Rd, T, dishZ, inlay, b, loopY: R + 4, nfcAt: [0, 32 * s], spins: P.centre !== 'fixed',
-    pocketZ0: dishZ - b.w, ledgeZ0: dishZ - b.w - 0.4 };
+    pocketZ0: dishZ - b.w, ledgeZ0: dishZ - b.w - LEDGE };
 }
 
 // ---------------------------------------------------------------- footprints + bed packing
@@ -220,8 +223,8 @@ export function createKit(wasm, font) {
 
     // centre: gold rose 1 mm under the dish floor, optional white skin around it
     const holeR = d.spins ? P.boreR : 0;
-    let rose = art(ROSE, s); if (holeR) rose = rose.subtract(disk(holeR, 96));
-    const backing = P.backing ? disk(Rd, 160).subtract(rose).subtract(disk((holeR || 6.51) + 0.6, 96)) : null;
+    let rose = art(ROSE, s); if (holeR) rose = rose.subtract(disk(holeR + POCKET_WALL, 96));
+    const backing = P.backing ? disk(Rd, 160).subtract(rose).subtract(disk((holeR || 6.51) + POCKET_WALL, 96)) : null;
 
     // back: SC logo or the 2024 USC Makers seal, the name along the south edge, NFC recess north
     const backParts = [];
@@ -242,11 +245,14 @@ export function createKit(wasm, font) {
     const blank = Manifold.extrude(outline, dishZ).add(ext(disk(R, 192), T - dishZ, dishZ).subtract(cyl(T, Rd, dishZ - 0.01, 160)));
     const cuts = [];
     let pause = null;
-    if (holeR) { cuts.push(cyl(b.w + 0.01, holeR, d.pocketZ0, 96)); cuts.push(cyl(0.41, 5.51, d.ledgeZ0, 96)); }
+    if (holeR) { cuts.push(cyl(b.w + 0.01, holeR, d.pocketZ0, 96)); cuts.push(cyl(LEDGE + 0.01, 5.51, d.ledgeZ0, 96)); }
     if (P.nfc === 'sticker') cuts.push(cyl(0.4, 5.2, -0.01, 96, ...d.nfcAt));
     if (P.nfc === 'embedded') { const z0 = 1.6, h = 0.6; cuts.push(cyl(h, 5.3, z0, 96, ...d.nfcAt)); pause = +((Math.ceil((z0 + h) / P.layer - 1e-6)) * P.layer).toFixed(2); }
     const cut = unionM(cuts);
-    const whiteSolid = unionM([ext(topTextIn, inlay, T - inlay), ext(back, inlay, 0), ext(backing, 0.4, dishZ - 0.4)]);
+    // under the bearing pocket the back art is shallower, so the logo never cuts through the floor into the pocket
+    const under = holeR && back ? disk(holeR + 0.6, 96) : null;
+    const backSolid = under ? unionM([ext(back.subtract(under), inlay, 0), ext(back.intersect(under), BACK_UNDER, 0)]) : ext(back, inlay, 0);
+    const whiteSolid = unionM([ext(topTextIn, inlay, T - inlay), backSolid, ext(backing, 0.4, dishZ - 0.4)]);
     const goldSolid = ext(rose, inlay, dishZ - inlay);
     let body = blank; if (cut) body = body.subtract(cut);
     for (const x of [whiteSolid, goldSolid]) if (x) body = body.subtract(x);
