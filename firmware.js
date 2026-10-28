@@ -62,6 +62,66 @@ export const DEFAULT_PROMPTS = {
   ],
 };
 
+// Engineering deck: shop-floor and design-review topics. Dares are hands-on: grab something nearby and read it like an engineer.
+export const ENGINEERING_PROMPTS = {
+  truth: [
+    "When did you ignore a number on a datasheet, and what did it cost you?",
+    "What is a mistake you made on a part that you would warn a first-year about?",
+    "Have you ever asked the machinist or the shop before finishing a design? What changed?",
+    "Who on your team knows how things really work? Have you ever told them?",
+    "What spec have you written that was too vague to build from?",
+    "Is CAD engineering, or is it documentation? Defend your answer.",
+    "What do you check before you let anyone review your work?",
+    "Tell us about a part that failed in a way you did not expect.",
+    "When did a tolerance you never thought about cause a problem?",
+    "Which do you trust more: a quick prototype or your calculations? Why?",
+    "What trait matters most in an engineer that no class teaches?",
+    "If your design failed tomorrow, who would you call first? Do you have their number?",
+    "How has AI changed the way you learn engineering, honestly: better or worse?",
+    "What question from a reviewer taught you the most?",
+    "What simple mechanism did you skip testing because it seemed too easy? What happened?",
+    "Where have you over-designed something just to feel safe? What did it cost?",
+    "Have you ever drawn a part that could be installed backwards? Did someone do it?",
+    "Do you sketch on paper before opening CAD? Be honest.",
+    "Have you ever picked a material for one number and been surprised by another?",
+    "When did you have to convince someone skeptical that your design was worth building?",
+    "What question are you afraid to ask because it might sound basic?",
+    "What job would park you instead of growing you? How would you tell in an interview?",
+  ],
+  dare: [
+    "What is this? Grab the nearest object with a moving part and explain how it works in 30 seconds.",
+    "Pick something plastic nearby and find its parting line or draft angle. Show the group.",
+    "Guess how the nearest object was made: molded, machined, printed, stamped or cast. Point to the evidence.",
+    "Find a fastener near you and name it: thread, head and drive. The group checks.",
+    "Design-review the chair you are sitting on: one thing it gets right, one it gets wrong. 30 seconds.",
+    "Find the part in something nearby that is meant to break first, and say why.",
+    "Explain how a ratchet or a zip tie only goes one way, using just your hands.",
+    "Explain why a soda can's top and bottom are shaped the way they are. 20 seconds.",
+    "Explain how a tamper-evident bottle cap proves it was never opened.",
+    "Name three ways a part can fail, then act one out.",
+    "Name a material that breaks down in sunlight and what you would use instead.",
+    "Sketch a quick-release mechanism, like a bike wheel or a clamp, in 30 seconds.",
+    "Explain why two different metals touching can corrode, as if to a 10-year-old.",
+    "Pick the most over-engineered object within reach and pitch how you would simplify it.",
+    "Explain why a Phillips screwdriver slips out of the screw, and name a drive that does not.",
+    "Explain how locking pliers stay shut without you squeezing. Use your hands as the linkage.",
+    "Twist-off or pry-off bottle cap: argue for one in 20 seconds.",
+    "Explain how a stovetop espresso pot pushes water up through the coffee.",
+    "Find something in the room that can only go together one way. Show the feature that forces it.",
+    "Explain lumens versus candela using a flashlight and a lamp.",
+    "Explain how a hose clamp gets so much grip from a tiny screw.",
+    "Explain how a can opener cuts without leaving a sharp edge, or admit you never noticed.",
+  ],
+};
+// deck: 'classroom' (the original lists), 'engineering', or 'both' (interleaved, so the first few voiced clips mix both)
+export function deckPrompts(deck = 'both') {
+  if (deck === 'classroom') return DEFAULT_PROMPTS;
+  const mix = (a, b) => { const o = []; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (b[i]) o.push(b[i]); if (a[i]) o.push(a[i]); } return o; };
+  const E = ENGINEERING_PROMPTS;
+  if (deck === 'engineering') return { ...DEFAULT_PROMPTS, truth: E.truth, dare: E.dare };
+  return { ...DEFAULT_PROMPTS, truth: mix(DEFAULT_PROMPTS.truth, E.truth), dare: mix(DEFAULT_PROMPTS.dare, E.dare) };
+}
+
 export function valuePrompts(label) {
   const L = String(label || 'This value').trim();
   return [

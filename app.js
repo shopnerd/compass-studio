@@ -4,7 +4,7 @@ import { makeOrbit } from './orbit.js';
 import { DEFAULTS, FILAMENTS, compassPrint, needlePrint, LIGHT } from './core.js';
 import { mountPlay } from './play.js';
 import { partModel, ledModel, magnetModel, insertModel, flatScrewModel, PART_SWATCH } from './components3d.js';
-import { DEFAULT_PROMPTS, valuePrompts } from './firmware.js';
+import { deckPrompts, valuePrompts } from './firmware.js';
 import { mountVoice } from './voice-ui.js';
 import { spinBom, bomCSV } from './bom.js';
 
@@ -381,10 +381,11 @@ function playConfig() {
   const I = spinLast ? spinLast.info : null;
   const segs = I ? I.segments.map(s => ({ label: s.label, kind: s.kind })) : undefined;
   const value = {}; if (segs) for (const s of segs) if (s.kind === 'value') value[s.label] = valuePrompts(s.label);
-  return { segments: segs, leds: I ? I.leds : undefined, R: I ? I.R : 41, prompts: { ...DEFAULT_PROMPTS, value }, voice: $('spVoice').checked };
+  return { segments: segs, leds: I ? I.leds : undefined, R: I ? I.R : 41, prompts: { ...deckPrompts($('spDeck').value), value }, voice: $('spVoice').checked };
 }
 function showPlay() { if (!play) play = mountPlay($('playBox'), playConfig); else play.refresh(); }
 $('spVoice').addEventListener('change', () => { if (play) play.refresh(); });
+$('spDeck').addEventListener('change', () => { if (play) play.refresh(); });
 async function spinExport(what) {
   const btns = document.querySelectorAll('.btn'); btns.forEach(b => b.disabled = true); setStatus('Exporting…', true);
   try { const res = await call({ type: 'spinExport', what, spin: spinParams() }); save(res.files); setStatus(`Saved ${res.files.map(f => f[0]).join(', ')}`); }
