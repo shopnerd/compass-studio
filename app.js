@@ -7,6 +7,7 @@ import { partModel, ledModel, magnetModel, insertModel, flatScrewModel, PART_SWA
 import { deckPrompts, valuePrompts } from './firmware.js';
 import { mountVoice } from './voice-ui.js';
 import { spinBom, bomCSV } from './bom.js';
+import { mountValuePicker, readLink } from './valuepicker.js';
 
 const $ = (id) => document.getElementById(id);
 const worker = new Worker('./worker.js', { type: 'module' });
@@ -25,7 +26,7 @@ const SLOT_GROUPS = ['body', 'white', 'gold', 'needle'];
 for (const g of SLOT_GROUPS) { const s = $('slot-' + g); for (let i = 1; i <= 5; i++) s.add(new Option(`Slot ${i}`, i)); s.value = DEFAULTS.slots[g]; }
 function params() {
   return {
-    name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), autoArrange: $('autoArrange').checked, caps: $('caps').checked,
+    name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), more: [4, 5, 6, 7].map(i => $('v' + i).value), autoArrange: $('autoArrange').checked, caps: $('caps').checked,
     back: $('back').value, backing: $('backing').checked, loop: $('loop').checked, scale: +$('scale').value,
     centre: $('centre').value, nfc: $('nfc').value, boreR: +$('boreR').value || 6.51, pinD: +$('pinD').value || 5.2,
     printer: $('printer').value, gap: +$('gap').value,
@@ -35,7 +36,8 @@ function params() {
 try { const saved = JSON.parse(localStorage.getItem('compass-studio') || 'null'); if (saved) restore(saved); } catch (_) {}
 function restore(p) {
   const set = (id, v) => { if (v !== undefined && $(id)) { if ($(id).type === 'checkbox') $(id).checked = v; else $(id).value = v; } };
-  set('name', p.name); (p.values || []).forEach((v, i) => set('v' + i, v));
+  set('name', p.name); (p.values || []).forEach((v, i) => set('v' + i, v)); (p.more || []).forEach((v, i) => set('v' + (4 + i), v));
+  if (p.spOrder) set('spOrder', p.spOrder);
   for (const k of ['autoArrange', 'caps', 'back', 'backing', 'loop', 'scale', 'centre', 'nfc', 'boreR', 'pinD', 'printer', 'gap']) set(k, p[k]);
   if (p.slots) for (const g of SLOT_GROUPS) set('slot-' + g, p.slots[g]);
 }
@@ -156,7 +158,7 @@ async function rebuild() {
   if (building) { again = true; return; }
   building = true; setStatus('Building…', true);
   const p = params();
-  try { localStorage.setItem('compass-studio', JSON.stringify(p)); } catch (_) {}
+  try { localStorage.setItem('compass-studio', JSON.stringify({ ...p, spOrder: $('spOrder').value })); } catch (_) {}
   try {
     const res = await call({ type: 'build', params: p });
     last = res; showCompass(res); render(res, p); drawBed();
@@ -230,7 +232,8 @@ $('exClass').onclick = (e) => { const r = parseRoster(); if (!r.length) return s
 // ================================================================ Spin Compass
 for (const g of ['body', 'white', 'gold', 'caps']) { const sel = $('sp-slot-' + g); for (let i = 1; i <= 5; i++) sel.add(new Option(`Slot ${i}`, i)); sel.value = { body: 1, white: 2, gold: 3, caps: 1 }[g]; }
 function spinParams() {
-  return { name: $('name').value, values: [0, 1, 2, 3].map(i => $('v' + i).value), extras: [0, 1, 2, 3].map(i => $('x' + i).value || ['Truth', 'Dare', 'Again', 'Choose'][i]),
+  const n = $('spOrder').value === 'eight' ? 8 : 4;
+  return { name: $('name').value, values: [...Array(n).keys()].map(i => $('v' + i).value), extras: [0, 1, 2, 3].map(i => $('x' + i).value || ['Truth', 'Dare', 'Again', 'Choose'][i]),
     bottom: [$('spBottom1').value, $('spBottom2').value], order: $('spOrder').value, printer: $('spPrinter').value, disc: $('spDisc').value, leds: $('spLeds').value, battery: $('spBattery').value, speaker: $('spSpeaker').value, imu: $('spImu').value, slots: Object.fromEntries(['body', 'white', 'gold', 'caps'].map(g => [g, +$('sp-slot-' + g).value])) };
 }
 function setModel(m) {
@@ -241,6 +244,7 @@ function setModel(m) {
   const cur = document.querySelector('.tabs [data-view][aria-selected=true]');
   if (cur && cur.hidden) document.querySelector('[data-view="3d"]').click();
   try { localStorage.setItem('compass-studio-model', m); } catch (_) {}
+  updateEight(); picker.refresh();
   rebuild();
 }
 document.querySelectorAll('.model button').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
@@ -381,7 +385,7 @@ function playConfig() {
   const I = spinLast ? spinLast.info : null;
   const segs = I ? I.segments.map(s => ({ label: s.label, kind: s.kind })) : undefined;
   const value = {}; if (segs) for (const s of segs) if (s.kind === 'value') value[s.label] = valuePrompts(s.label);
-  return { segments: segs, leds: I ? I.leds : undefined, R: I ? I.R : 41, prompts: { ...deckPrompts($('spDeck').value), value }, voice: $('spVoice').checked };
+  return { segments: segs, leds: I ? I.leds : undefined, R: I ? I.R : 41, label: I ? I.label : undefined, prompts: { ...deckPrompts($('spDeck').value), value }, voice: $('spVoice').checked };
 }
 function showPlay() { if (!play) play = mountPlay($('playBox'), playConfig); else play.refresh(); }
 $('spVoice').addEventListener('change', () => { if (play) play.refresh(); });
@@ -400,5 +404,29 @@ document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pre
 $('xray').addEventListener('click', () => { spinXray = !spinXray; $('xray').setAttribute('aria-pressed', spinXray); if (spinXray && (mode === 'inside' || mode === 'explode' || mode === 'play' || mode === 'bed')) document.querySelector('[data-view="3d"]').click(); else if (spinLast) showSpin(spinLast); });
 document.querySelectorAll('.only-compass').forEach(el => el.hidden = model !== 'compass');
 document.querySelectorAll('.only-spin').forEach(el => el.hidden = model !== 'spin');
+
+// ---------------------------------------------------------------- ValueCore: value picker, eight-value spinner, ?values= link
+function updateEight() {
+  const eight = model === 'spin' && $('spOrder').value === 'eight';
+  $('moreVals').hidden = !eight; $('gameWords').hidden = eight; $('spDeck').closest('label').hidden = eight;
+  $('gameHint').textContent = eight ? 'Eight segments, all values. Land on one and it asks a question about it.'
+    : 'Eight segments: the four values and four game words. Land on a value and it asks a question about it.';
+}
+const picker = mountValuePicker([0, 1, 2, 3, 4, 5, 6, 7].map(i => $('v' + i)), { model: () => model, defBox: $('valDef') });
+$('spOrder').addEventListener('change', updateEight);
+{ const link = readLink();
+  if (link) {
+    if (link.model) { model = link.model; try { localStorage.setItem('compass-studio-model', model); } catch (_) {} }
+    link.values.forEach((v, i) => { $('v' + i).value = v; });
+    if (link.name) $('name').value = link.name;
+    if (link.values.length > 4) $('spOrder').value = 'eight';
+    const q = new URLSearchParams(location.search); for (const k of ['values', 'name', 'model']) q.delete(k);
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    document.querySelectorAll('.model button').forEach(b => b.setAttribute('aria-pressed', b.dataset.model === model));
+    document.querySelectorAll('.only-compass').forEach(el => el.hidden = model !== 'compass');
+    document.querySelectorAll('.only-spin').forEach(el => el.hidden = model !== 'spin');
+  }
+}
+updateEight(); picker.showDef($('v0'));
 
 call({ type: 'init' }).then(() => { rebuild().then(rosterInfo); }).catch(err => setStatus('The geometry engine did not load: ' + err.message));

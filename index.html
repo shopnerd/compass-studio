@@ -30,6 +30,14 @@
         <label><span class="dir">Value 3</span><input id="v2" value="Excellence" maxlength="18" autocomplete="off"></label>
         <label><span class="dir">Value 4</span><input id="v3" value="Service" maxlength="18" autocomplete="off"></label>
       </div>
+      <div class="vals" id="moreVals" hidden>
+        <label><span class="dir">Value 5</span><input id="v4" value="Courage" maxlength="18" autocomplete="off"></label>
+        <label><span class="dir">Value 6</span><input id="v5" value="Empathy" maxlength="18" autocomplete="off"></label>
+        <label><span class="dir">Value 7</span><input id="v6" value="Curiosity" maxlength="18" autocomplete="off"></label>
+        <label><span class="dir">Value 8</span><input id="v7" value="Justice" maxlength="18" autocomplete="off"></label>
+      </div>
+      <div class="vdef" id="valDef" hidden></div>
+      <p class="hint vsrc">Type to search 200 character values from <a href="https://value-core-elisabetharnold.replit.app/" target="_blank" rel="noopener">ValueCore</a>. Green prints well, amber shrinks, red will not fit.</p>
       <label class="check only-compass"><input type="checkbox" id="autoArrange" checked> Longest words north and south (the 2025 rule)</label>
       <label class="check only-compass"><input type="checkbox" id="caps" checked> Capitals</label>
       <p class="where" id="where"></p>
@@ -98,14 +106,14 @@ Marcus Lee, Fairness, Service, Diligence, Respect</textarea>
     <div class="only-spin" hidden>
       <details open>
         <summary>Game</summary>
-        <p class="hint">Eight segments: the four values and four game words. Land on a value and it asks a question about it.</p>
-        <div class="vals">
+        <p class="hint" id="gameHint">Eight segments: the four values and four game words. Land on a value and it asks a question about it.</p>
+        <div class="vals" id="gameWords">
           <label><span class="dir">Game 1</span><input id="x0" value="Truth" maxlength="12" autocomplete="off"></label>
           <label><span class="dir">Game 2</span><input id="x1" value="Dare" maxlength="12" autocomplete="off"></label>
           <label><span class="dir">Game 3</span><input id="x2" value="Again" maxlength="12" autocomplete="off"></label>
           <label><span class="dir">Game 4</span><input id="x3" value="Choose" maxlength="12" autocomplete="off"></label>
         </div>
-        <label>Order <select id="spOrder"><option value="mix">Value, game, value, game…</option><option value="values">Four values, then four game words</option></select></label>
+        <label>Order <select id="spOrder"><option value="mix">Value, game, value, game…</option><option value="values">Four values, then four game words</option><option value="eight">Eight values, no game words</option></select></label>
         <label>Truth and Dare deck <select id="spDeck"><option value="both">Classroom + engineering</option><option value="engineering">Engineering: shop and design</option><option value="classroom">Classroom only</option></select></label>
         <label class="check"><input type="checkbox" id="spVoice" checked> Read results aloud in Play</label>
         <p class="hint" style="margin:10px 0 0">Text on the bottom (optional): white letters inlaid in the floor, printed in the first layers. Two lines on opposite sides.</p>

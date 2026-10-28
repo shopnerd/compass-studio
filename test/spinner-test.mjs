@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import Module from '../vendor/manifold.js';
 import opentype from '../vendor/opentype.module.js';
 import { createKit, meshToSTL } from '../core.js';
-import { buildSpinner, spinLayout, SPIN_DEFAULTS, INSERT, CAP, SCREW, screwR } from '../spinner.js';
+import { buildSpinner, spinLayout, segmentsOf, SPIN_DEFAULTS, INSERT, CAP, SCREW, screwR } from '../spinner.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fb = readFileSync(join(here, '../fonts/nunito-latin-800-normal.woff'));
@@ -104,6 +104,12 @@ function run(S, label) {
 const sp = run(SPIN_DEFAULTS, 'default');
 run({ ...SPIN_DEFAULTS, values: ['Accountability', 'Perseverance', 'Compassion', 'Curiosity'] }, 'long values');
 run({ ...SPIN_DEFAULTS, order: 'values' }, 'values together');
+{ // eight values (a ValueCore compass): eight value segments, no game words, even a value spelled like one
+  const eight = ['Integrity', 'Courage', 'Empathy', 'Curiosity', 'Justice', 'Honesty', 'Truth', 'Service'];
+  const segs = segmentsOf({ ...SPIN_DEFAULTS, order: 'eight', values: eight });
+  if (segs.length !== 8 || segs.some(s => s.kind !== 'value') || segs.map(s => s.label).join() !== eight.join()) fail('eight values: segments wrong ' + JSON.stringify(segs.map(s => [s.label, s.kind])));
+  run({ ...SPIN_DEFAULTS, order: 'eight', values: eight }, 'eight values');
+}
 run({ ...SPIN_DEFAULTS, bottom: ['Maya Rodriguez', 'WRIT 340 · Fall 2026'] }, 'bottom text');
 run({ ...SPIN_DEFAULTS, speaker: 'none', bottom: ['A much longer line of text that cannot fit', ''] }, 'bottom text, too long, no speaker');
 run({ ...SPIN_DEFAULTS, disc: '90', leds: '16', battery: '502025', speaker: '15' }, 'Ø90, 16 LEDs, 220 mAh, 15 mm');

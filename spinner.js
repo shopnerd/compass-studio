@@ -61,7 +61,7 @@ export const SPIN_DEFAULTS = {
   values: ['Integrity', 'Honor', 'Excellence', 'Service'],
   extras: ['Truth', 'Dare', 'Again', 'Choose'],
   bottom: ['', ''],                // optional text on the bottom: line 1, line 2 (white inlay, printed on the bed side)
-  order: 'mix',                    // mix: value, game, value, game…   values: the four values together
+  order: 'mix',                    // mix: value, game, value, game…   values: the four values together   eight: eight values, no game words
   name: 'Name Example',
   battery: '302025', speaker: '20', leds: '12', disc: '86', imu: 'dsox',
   R: 41, H: 13, floor: 1.2, lid: 2.4, wall: 1.6, wellR: 14.6, hubR: 16.2, wellDepth: 3,   // hub ring: bore 11 -> 16.2, 1.6 mm wall round the finger wells
@@ -75,7 +75,20 @@ export const SPIN_DEFAULTS = {
 const P2 = (r, a) => [r * Math.sin(a * Math.PI / 180), r * Math.cos(a * Math.PI / 180)];
 export function resolveChoices(S) {
   const R = CHOICES.disc[S.disc] || S.R, [o, i] = CHOICES.leds[S.leds] || [S.ledsOuter, S.ledsInner];
-  return { ...S, R, ledsOuter: o, ledsInner: i, rOuterLed: R - 8.5 };
+  // outer lights 10 in from the edge so the labels can ring the rim outside them; never closer to the inner ring than two
+  // Ø10 LED boards allow (Ø82 with inner lights cannot move in, and keeps its labels between the rings)
+  const rOuterLed = i ? Math.min(R - 8.5, Math.max(R - 10, S.rInnerLed + LED_GAP)) : R - 10;
+  return { ...S, R, ledsOuter: o, ledsInner: i, rOuterLed };
+}
+const LED_GAP = SPIN_PARTS.led.d + 2 * 0.3 + 0.6;   // centre to centre, inner to outer LED board: Ø10 boards, 0.3 each, 0.6 apart
+const NUNITO = { up: 0.73, down: 0.19 };           // tallest letter / deepest descender per mm of font size (Nunito ExtraBold)
+// Where the segment labels go: outside the outer LED windows if letters at least 4 mm fit there, else between the two light rings.
+// base = the baseline radius; size = the largest font size; deg = how much of each 45° segment a label may use.
+export function labelBand(S) {
+  const face = S.R - 2.0, clear = S.rOuterLed + 3 + 0.8;   // inside the rim with 0.4 to spare; 0.8 past the Ø6 LED windows
+  const size = Math.min(4.6, (face - clear) / (NUNITO.up + NUNITO.down));
+  if (size >= 4) return { outer: true, base: clear + NUNITO.down * size, size, deg: 39, degNorth: 37 };
+  return { outer: false, base: (S.rInnerLed + S.rOuterLed) / 2 + 0.5, size: 4.6, deg: 39, degNorth: 39 };
 }
 function partTable(S) {
   const t = { ...SPIN_PARTS, battery: { ...SPIN_PARTS.battery, ...(CHOICES.battery[S.battery] || {}), shape: 'rect' }, imu: { ...SPIN_PARTS.imu, ...(CHOICES.imu[S.imu] || CHOICES.imu.dsox), shape: 'rect' } };
@@ -85,8 +98,9 @@ function partTable(S) {
 }
 export function segmentsOf(S) {
   const v = S.values.map(s => (s || '').trim()), e = S.extras;
-  const list = S.order === 'values' ? [...v, ...e] : [v[0], e[0], v[1], e[1], v[2], e[2], v[3], e[3]];
-  const kind = (l) => ({ truth: 'truth', dare: 'dare', again: 'again', choose: 'choose' }[l.toLowerCase()] || 'value');
+  const eight = S.order === 'eight';   // eight values, no game words (a ValueCore compass has eight)
+  const list = eight ? [...Array(8).keys()].map(i => v[i] || '') : S.order === 'values' ? [...v.slice(0, 4), ...e] : [v[0], e[0], v[1], e[1], v[2], e[2], v[3], e[3]];
+  const kind = (l) => eight ? 'value' : ({ truth: 'truth', dare: 'dare', again: 'again', choose: 'choose' }[l.toLowerCase()] || 'value');
   return list.map((label, i) => ({ label, kind: kind(label), a0: i * 45, a1: (i + 1) * 45, centre: i * 45 + 22.5 }));   // segment i runs clockwise from i·45°, like the firmware + game
 }
 export function ledsOf(S) {
@@ -304,16 +318,19 @@ export function buildSpinner(K, S0) {
   const dividers = unionCS(segs.map((s, i) => { const a = (s.centre + 22.5) * Math.PI / 180; const w = 0.5; return mk([[[w * Math.cos(a) + rFaceIn * Math.sin(a), -w * Math.sin(a) + rFaceIn * Math.cos(a)], [w * Math.cos(a) + rFaceOut * Math.sin(a), -w * Math.sin(a) + rFaceOut * Math.cos(a)], [-w * Math.cos(a) + rFaceOut * Math.sin(a), w * Math.sin(a) + rFaceOut * Math.cos(a)], [-w * Math.cos(a) + rFaceIn * Math.sin(a), w * Math.sin(a) + rFaceIn * Math.cos(a)]]], 'NonZero'); }))
     .subtract(ledWin.offset(0.8, 'Round', 2, 16));
   const sector = (a0, a1, r0, r1) => { const pts = []; for (let a = a0; a <= a1 + 1e-6; a += 2) pts.push(at(r1, a)); for (let a = a1; a >= a0 - 1e-6; a -= 2) pts.push(at(r0, a)); return mk([pts], 'NonZero'); };
-  const textR = (S.rInnerLed + S.rOuterLed) / 2 + 0.5;
+  const band = labelBand(S);
   const labels = []; const labelSizes = [];
   segs.forEach(s => {
-    // values as typed, game words in capitals, so the two kinds read differently
-    const t = arcText(s.kind === 'value' ? s.label : s.label.toUpperCase(), textR, 90 - s.centre, 4.6, 39, 2.6, 0.3);
+    // values as typed, game words in capitals, so the two kinds read differently. The two segments either side of the
+    // north arrow give up a little length so their letters stay clear of it.
+    const deg = s.a0 === 0 || s.a1 >= 360 ? band.degNorth : band.deg;
+    const t = arcText(s.kind === 'value' ? s.label : s.label.toUpperCase(), band.base, 90 - s.centre, band.size, deg, 2.6, 0.3);
     labels.push(t.cs); labelSizes.push(t.size);
     if (!t.fits) warn.push(`"${s.label}" is too long for its segment; try a shorter word`); else if (t.size < 3) warn.push(`"${s.label}" prints small (${t.size.toFixed(1)} mm)`);
   });
   const labelCS = unionCS(labels);
-  const arrow = mk([[at(R - 0.7, 0), at(R - 4.6, -5.2), at(R - 4.6, 5.2)]], 'NonZero');
+  const arrow = band.outer ? mk([[at(R - 0.7, 0), at(R - 4.6, -2.0), at(R - 4.6, 2.0)]], 'NonZero')   // slim, between the two rim labels
+    : mk([[at(R - 0.7, 0), at(R - 4.6, -5.2), at(R - 4.6, 5.2)]], 'NonZero');
   let goldCS = unionCS(segs.filter((_, i) => i % 2).map(s => sector(s.centre - 22.5, s.centre + 22.5, rFaceIn, rFaceOut)));
   goldCS = goldCS.subtract(dividers.offset(0.3, 'Round', 2, 8)).subtract(ledWin.offset(1.0, 'Round', 2, 16)).subtract(labelCS.offset(0.6, 'Round', 2, 8));
   goldCS = unionCS([goldCS, arrow]);

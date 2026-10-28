@@ -86,7 +86,8 @@ export function mountPlay(container, getConfig) {
   function normalize(c = {}) {
     const segments = Array.isArray(c.segments) && c.segments.length ? c.segments.map((s) => ({ label: String(s.label ?? ''), kind: KIND_RGB[s.kind] ? s.kind : 'value' })) : DEFAULT_SEGMENTS;
     const leds = Array.isArray(c.leds) && c.leds.length ? c.leds : DEFAULT_LEDS;
-    return { segments, leds, R: +c.R || 40, prompts: c.prompts || {}, voice: !!c.voice };
+    const label = c.label && +c.label.base > 0 && +c.label.size > 0 ? c.label : null;
+    return { segments, leds, R: +c.R || 40, label, prompts: c.prompts || {}, voice: !!c.voice };
   }
   function readColors() {
     const cs = getComputedStyle(container), v = (n, f) => cs.getPropertyValue(n).trim() || f;
@@ -307,12 +308,12 @@ export function mountPlay(container, getConfig) {
     ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 0.7;
     for (let i = 0; i < N; i++) { const [x0, y0] = P(11.5, i * sp), [x1, y1] = P(R - 0.6, i * sp); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
     ctx.beginPath(); ctx.arc(0, 0, R - 0.5, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,204,0,.85)'; ctx.lineWidth = 0.9; ctx.stroke();
-    // labels between the two LED rings
+    // labels where the model puts them: round the rim outside the outer lights, or between the two light rings
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const rt = 26.2;
+    const lb = cfg.label || { base: 26.2 - 1.6, size: 4.6, deg: 39, degNorth: 39 }, rt = lb.base + 0.36 * lb.size;
     cfg.segments.forEach((seg, i) => {
-      const t = (seg.label || KIND_NAME[seg.kind]).toUpperCase();
-      arcText(t, i * sp + sp / 2, rt, fitPx(t, rt, (sp - 9) * D2R * rt, 4.6));
+      const t = (seg.label || KIND_NAME[seg.kind]).toUpperCase(), deg = i === 0 || i === N - 1 ? lb.degNorth : lb.deg;
+      arcText(t, i * sp + sp / 2, rt, fitPx(t, rt, (deg * sp / 45 - 3) * D2R * rt, lb.size));
     });
     // north arrow on the disc (spin-the-bottle pointer)
     ctx.beginPath(); ctx.moveTo(0, -R + 1.2); ctx.lineTo(-2.2, -R + 4.8); ctx.lineTo(2.2, -R + 4.8); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
