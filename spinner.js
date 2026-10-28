@@ -341,8 +341,12 @@ export function buildSpinner(K, S0) {
   let cap = Manifold.revolve(mk([ring], 'NonZero'), 128);
   for (let i = 0; i < 3; i++) cap = cap.add(Manifold.cube([0.6, C.sock - C.ribIn + 0.1, C.sockD - 0.3]).translate([-0.3, C.ribIn, 0.3]).rotate([0, 0, i * 120 + 60]));   // crush ribs
   cap = cap.subtract(cyl(C.magnetPocket[1], C.magnetPocket[0], -0.01, 24, ...at(C.magnetR, 0)));                   // magnet pocket from the back
-  const ptr = mk([[[0, capR - 0.4], [-2.4, dishR - 3], [2.4, dishR - 3]]], 'NonZero');   // wedge at 12 o'clock (+y)
-  const capPtr = cap.intersect(ext(ptr, C.t + 1, -0.5)).subtract(cap.translate([0, 0, -0.6]));                  // white pointer: the top 0.6 of the face
+  // white pointer: the top 0.6 of the face inside a wedge at 12 o'clock (+y), off the rounded edge. The skin is revolved
+  // from the same top-profile vertices as the cap, so its face matches the cap's facets exactly (no specks, no seams).
+  const face = top.filter(([r]) => r <= capR - C.edge + 1e-9);   // flat land + dish, out to in
+  const skin = Manifold.revolve(mk([[...face, ...face.slice().reverse().map(([r, z]) => [r, z - 0.6])]], 'NonZero'), 128);
+  const ptr = mk([[[0, capR - C.edge - 0.15], [-2.3, dishR - 3.5], [2.3, dishR - 3.5]]], 'NonZero');
+  const capPtr = skin.intersect(ext(ptr, C.t + 2, -1));
   const capBody = cap.subtract(capPtr).decompose().reduce((a, m) => (m.volume() > a.volume() ? m : a));   // drop zero-volume facet slivers
   const pinL = capPin(b), pc = C.pinChamfer;
   const pin = Manifold.cylinder(pc, C.pinR - pc, C.pinR, 48).add(cyl(pinL - 2 * pc, C.pinR, pc, 48)).add(Manifold.cylinder(pc, C.pinR, C.pinR - pc, 48).translate([0, 0, pinL - pc]));
