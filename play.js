@@ -252,7 +252,7 @@ export function mountPlay(container, getConfig) {
     [...text].forEach((ch, i) => {
       const w = widths[i] / rt / D2R, mid = cur + w / 2; cur += w;
       const a = flip ? ac_ + total / 2 - mid : ac_ - total / 2 + mid;
-      ctx.save(); ctx.rotate(a * D2R); ctx.translate(0, flip ? rt : -rt); if (flip) ctx.rotate(Math.PI);
+      ctx.save(); ctx.rotate(a * D2R); ctx.translate(0, -rt); if (flip) ctx.rotate(Math.PI);   // lower half: same spot, letter turned to read upright
       ctx.fillText(ch, 0, 0); ctx.restore();
     });
   }
