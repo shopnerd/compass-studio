@@ -294,16 +294,21 @@ function showSpin(res) {
     }
     const hl = I.parts.find(p => p.key === 'hall');
     if (hl && !inside) { const m = magnetModel(); m.position.set(0, 12.3, A.zTopCap + (ex ? 58 : 0)); group.add(m); }   // in the top cap's pocket, over the hall sensor
-    if (I.rScrew && I.insert) for (const sa of I.screws) {   // brass inserts flush in the bosses; M2 flat-head screws through the lid's countersinks
-      const a = rad(sa), x = I.rScrew * Math.sin(a), y = I.rScrew * Math.cos(a), ins = I.insert;
-      const iv = insertModel(ins.len, ins.knurl); iv.position.set(x, y, A.zLid + (ex ? 8 : 0)); group.add(iv);
-      if (!inside) { const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.position.set(x, y, A.zLid + I.lidT + (ex ? 54 : 0)); group.add(sc); }
-    }
     const b = res.info.balance;
     for (const s of (b.slots || [])) {   // the steel BBs that balance it, in rows in their slots
       const steel = mat('bearing'), a = s.angle * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), tx = Math.cos(a), ty = -Math.sin(a);
       for (let k = 0; k < s.n; k++) { const off = (k - (s.n - 1) / 2) * 4.65, o = new THREE.Mesh(new THREE.SphereGeometry(2.25, 20, 14), steel);
         const [dx, dy] = s.radialRow ? [ux * off, uy * off] : [tx * off, ty * off]; o.position.set(s.r * ux + dx, s.r * uy + dy, res.info.floor + 2.25 + lift); group.add(o); }
+    }
+  }
+  { // lid screws: up from the bottom face (always visible there) into inserts in the lid pillars' tips
+    const I = res.info, rad = d => d * Math.PI / 180;
+    if (I.rScrew && I.insert) for (const sa of I.screws) {
+      const a = rad(sa), x = I.rScrew * Math.sin(a), y = I.rScrew * Math.cos(a), ins = I.insert;
+      if (!inside) {   // insert in the lid pillar's tip (moves with the lid), screw up from the bottom face
+        const iv = insertModel(ins.len, ins.knurl); iv.rotation.x = Math.PI; iv.position.set(x, y, A.zPillar + (ex ? 40 : 0)); group.add(iv);
+      }
+      const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.rotation.x = Math.PI; sc.position.set(x, y, ex ? -24 : 0); group.add(sc);
     }
   }
   frame();

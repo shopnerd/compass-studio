@@ -19,9 +19,12 @@ export const SPIN_PARTS = {
   bb:      { label: 'Steel BB 4.5 mm (balance weight)', d: 4.5, g: 0.37 },
   screw:   { label: 'M2 × 6 flat head machine screw' },
 };
-// Lid screws go into brass heat-set inserts in the tray bosses. ruthex RX-M2x4 numbers (the same as Box Studio's M2):
-// printed hole 3.2, insert 4.0 long, knurl 3.6, min wall 1.3; the lid gets a 2.4 clearance hole and a 90° countersink
-// for the 4.0 flat head. Screw M2 × 6: 2.4 lid + 4.0 insert, tip 0.4 short of the insert's end.
+// Lid screws come in from the bottom: M2 × 6 flat heads, countersunk flush in the tray floor (on a 1 mm pad), go up into
+// brass heat-set inserts in the tips of three pillars that hang from the lid. ruthex RX-M2x4 numbers (the same as Box
+// Studio's M2): printed hole 3.2, insert 4.0 long, knurl 3.6, min wall 1.3; 2.4 clearance, 90° countersink for the 4.0 head.
+// The pillar tips stop `gap` above the pad so the screw pulls the lid down onto the tray, not pillar onto floor.
+export const SCREW = { pad: 1.0, gap: 0.2, inset: 3.5 };
+export const screwR = (rOut) => rOut - SCREW.inset;
 // Finger caps: two identical dished caps press onto one printed pin through the 608's bore. Each cap's back has a boss
 // (r < boss) that bears on the bearing's inner ring only, a 0.5 relief ring over the outer ring (prints as a bridge over
 // layers 1-2), and a socket with 3 crush ribs (0.12 interference) for the pin. The tray's hub ring steps down `step`
@@ -194,7 +197,7 @@ export function spinLayout(S, quick = false, coarse = false) {
   if (slots.length) { const last = slots[slots.length - 1]; best = { n: slots.reduce((a, s) => a + s.n, 0), residual: Math.hypot(last.fx, last.fy), angle: slots[0].angle, r: slots[0].r, radialRow: slots[0].radialRow, slots: slots.map(({ n, angle, r, radialRow }) => ({ n, angle, r, radialRow })) }; }
   // screw bosses: three, roughly 120° apart, clear of parts, at segment centres so they miss the LED windows
   // screw bosses: three, as evenly spread as possible, clear of parts and pennies, away from the LED windows on the boundaries
-  const rs = rOut - 2.8, free = [];
+  const rs = screwR(rOut), free = [];
   for (let a = 0; a < 360; a += 2.5) {
     const offB = Math.abs((a % 45) - 22.5);                                   // distance to the nearest segment centre
     if (offB > 11) continue;
@@ -273,12 +276,14 @@ export function buildSpinner(K, S0) {
   for (const sl of L.bbSlots) {   // walled slots for the BBs; a drop of CA glue holds them
     guides.push(ext(rectCS(sl, 0).subtract(rectCS({ ...sl, radial: sl.radial - 1.8, tang: sl.tang - 1.8 }, 0)), 4.0, floor));
   }
-  const rs = rOut - 2.8;
-  for (const a of L.screws) guides.push(cyl(zLid - floor, INSERT.bossR, floor, 40, ...at(rs, a)));
+  const rs = screwR(rOut), zPillar = floor + SCREW.pad + SCREW.gap;   // lid pillar tips
+  for (const a of L.screws) guides.push(cyl(SCREW.pad, INSERT.bossR + 0.1, floor, 40, ...at(rs, a)));   // floor pad under each screw
   tray = tray.add(unionM(guides));
-  for (const a of L.screws) {   // heat-set insert holes: Ø3.2, insert length + 1 deep for the melt, 0.4 lead-in chamfer
-    tray = tray.subtract(cyl(INSERT.depth + 0.01, INSERT.hole / 2, zLid - INSERT.depth, 32, ...at(rs, a)));
-    tray = tray.subtract(Manifold.cylinder(INSERT.chamfer + 0.01, INSERT.hole / 2, INSERT.hole / 2 + INSERT.chamfer, 32).translate([...at(rs, a), zLid - INSERT.chamfer]));
+  const csH = (INSERT.head + 0.2 - INSERT.clear) / 2;   // 90°: the cone rises as much as it narrows
+  for (const a of L.screws) {   // screw holes up through the floor, countersunk on the bottom face; room round each lid pillar
+    tray = tray.subtract(cyl(floor + SCREW.pad + 0.2, INSERT.clear / 2, -0.1, 32, ...at(rs, a)));
+    tray = tray.subtract(Manifold.cylinder(csH + 0.01, INSERT.head / 2 + 0.1, INSERT.clear / 2, 32).translate([...at(rs, a), -0.01]));
+    tray = tray.subtract(cyl(zLid - floor - SCREW.pad + 0.01, INSERT.bossR + 0.25, floor + SCREW.pad, 40, ...at(rs, a)));
   }
   // USB-C through the rim at the board, with a recess for the plug's overmould
   const brd = L.parts.find(p => p.key === 'board');
@@ -320,15 +325,18 @@ export function buildSpinner(K, S0) {
   const ledDiff = ext(ledWin, lid - 1.6 + 0.01, zLid + 1.6 - 0.01);
   const whiteM = unionM([ext(whiteTop, 1.0, H - 1.0), ledDiff]);
   const goldM = ext(goldCS, 0.6, H - 0.6);
-  const csH = (INSERT.head + 0.2 - INSERT.clear) / 2;   // 90°: the cone drops as much as it narrows
-  const csinks = unionM(L.screws.map(a => Manifold.cylinder(csH + 0.01, INSERT.clear / 2, INSERT.head / 2 + 0.1, 32).translate([...at(rs, a), H - csH])));
-  lidM = lidM.subtract(ledPocket).subtract(ext(screwCS, lid + 0.2, zLid - 0.1)).subtract(csinks);
+  lidM = lidM.subtract(ledPocket);
   // the lid's alignment lip into the cavity
   lidM = lidM.add(ext(disk(rOut - 0.15, 160).subtract(disk(rOut - 1.3, 160)).subtract(screwCS.offset(2.2, 'Round', 2, 16)), 1.5, zLid - 1.5));
-  const white = whiteM.subtract(ext(screwCS.offset(0.4, 'Round', 2, 8), lid + 0.2, zLid - 0.1));
-  const gold = goldM.subtract(whiteM).subtract(ext(screwCS.offset(0.6, 'Round', 2, 8), lid + 0.2, zLid - 0.1)).subtract(csinks);
+  // pillars hang from the lid to just above the floor pads; a heat-set insert goes into each tip (tip up when printed)
+  for (const a of L.screws) {
+    lidM = lidM.add(cyl(zLid - zPillar + 0.01, INSERT.bossR, zPillar, 40, ...at(rs, a)));
+    lidM = lidM.subtract(cyl(INSERT.depth + 0.01, INSERT.hole / 2, zPillar - 0.01, 32, ...at(rs, a)));
+    lidM = lidM.subtract(Manifold.cylinder(INSERT.chamfer + 0.01, INSERT.hole / 2 + INSERT.chamfer, INSERT.hole / 2, 32).translate([...at(rs, a), zPillar - 0.01]));
+  }
+  const white = whiteM, gold = goldM.subtract(whiteM);
   lidM = lidM.subtract(whiteM).subtract(goldM);
-  const whiteOut = white.subtract(csinks);
+  const whiteOut = white;
 
   // ---- finger caps: two identical dished caps on a printed pin (see CAP). Built as printed: back on the bed, dish up.
   const capR = wellR - 0.6, C = CAP, dishR = capR - 1.5, rsD = (dishR ** 2 + C.dip ** 2) / (2 * C.dip);
@@ -378,7 +386,7 @@ export function buildSpinner(K, S0) {
   return {
     S, L, warn,
     parts: { tray, trayWhite, lid: lidM, white: whiteOut, gold, cap: capBody, capPtr, pin },
-    assembly: { zLid, zTopCap, zBotCap, zB0, zPin, zHall, capT: C.t, capR, pinL },   // bottom cap = cap rotated 180° about x, back at zBotCap
+    assembly: { zLid, zTopCap, zBotCap, zB0, zPin, zHall, zPillar, capT: C.t, capR, pinL },   // bottom cap = cap rotated 180° about x, back at zBotCap
     print: {   // print poses: tray as is; lid face down (smooth bed-side face); caps back down, dish up (both the same); pin standing
       tray: trayWhite ? { body: tray, white: trayWhite } : { body: tray },
       lid: { body: lidM.rotate([180, 0, 0]).translate([0, 0, H]), white: whiteOut.rotate([180, 0, 0]).translate([0, 0, H]), gold: gold.rotate([180, 0, 0]).translate([0, 0, H]) },

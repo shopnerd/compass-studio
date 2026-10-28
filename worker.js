@@ -2,7 +2,7 @@
 import Module from './vendor/manifold.js';
 import opentype from './vendor/opentype.module.js';
 import { createKit, DEFAULTS, packBed, scaleSweep, swapEstimate, build3MF, zipFiles, meshToSTL, transformMesh, dims } from './core.js';
-import { buildSpinner, packKits, SPIN_DEFAULTS, CHOICES, INSERT } from './spinner.js';
+import { buildSpinner, packKits, SPIN_DEFAULTS, CHOICES, INSERT, screwR } from './spinner.js';
 
 let K = null;
 const ready = (async () => {
@@ -102,7 +102,7 @@ onmessage = async (e) => {
       const S = { ...SPIN_DEFAULTS, ...m.spin, slots: { ...SPIN_DEFAULTS.slots, ...((m.spin || {}).slots || {}) } };
       const t0 = performance.now(); const sp = buildSpinner(K, S); const ms = performance.now() - t0;
       const L = sp.L, info = { parts: L.parts.map(({ key, label, angle, r, shape, radial, tang, d, h, g, inHub }) => ({ key, label, angle, r, shape, radial, tang, d, h, g, inHub })),
-        leds: L.leds, segments: L.segments, balance: L.balance, bbSlots: L.bbSlots, imuClass: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).cls, imuLabel: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).label, screws: L.screws, rScrew: L.rOut - 2.8, lidT: sp.S.lid, insert: { hole: INSERT.hole, len: INSERT.len, knurl: INSERT.knurl, head: INSERT.head, clear: INSERT.clear, screwLen: INSERT.screwLen, bossR: INSERT.bossR, name: INSERT.name }, imu: S.imu, warn: sp.warn, assembly: sp.assembly, R: sp.S.R, H: sp.S.H, floor: sp.S.floor,
+        leds: L.leds, segments: L.segments, balance: L.balance, bbSlots: L.bbSlots, imuClass: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).cls, imuLabel: (CHOICES.imu[S.imu] || CHOICES.imu.dsox).label, screws: L.screws, rScrew: screwR(L.rOut), lidT: sp.S.lid, insert: { hole: INSERT.hole, len: INSERT.len, knurl: INSERT.knurl, head: INSERT.head, clear: INSERT.clear, screwLen: INSERT.screwLen, bossR: INSERT.bossR, name: INSERT.name }, imu: S.imu, warn: sp.warn, assembly: sp.assembly, R: sp.S.R, H: sp.S.H, floor: sp.S.floor,
         grams: (() => { const g = (m) => m.volume() * 1.24 / 1000, P = sp.parts; return { body: g(P.tray) + g(P.lid), letters: g(P.white) + 2 * g(P.capPtr) + (P.trayWhite ? g(P.trayWhite) : 0), gold: g(P.gold), caps: 2 * g(P.cap) + g(P.pin) }; })() };
       if (m.type === 'spinBuild') {
         const meshes = Object.fromEntries(Object.entries(sp.parts).filter(([, v]) => v && !v.isEmpty()).map(([k, v]) => [k, K.toMesh(v)]));
