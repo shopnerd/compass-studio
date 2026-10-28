@@ -306,7 +306,7 @@ function showSpin(res) {
     if (I.rScrew && I.insert) for (const sa of I.screws) {
       const a = rad(sa), x = I.rScrew * Math.sin(a), y = I.rScrew * Math.cos(a), ins = I.insert;
       if (!inside) {   // insert in the lid pillar's tip (moves with the lid), screw up from the bottom face
-        const iv = insertModel(ins.len, ins.knurl); iv.rotation.x = Math.PI; iv.position.set(x, y, A.zPillar + (ex ? 40 : 0)); group.add(iv);
+        const iv = insertModel(ins.len, ins.knurl); iv.rotation.x = Math.PI; iv.position.set(x, y, A.zPillar + (ex ? 40 - 9 : 0)); group.add(iv);   // exploded: hangs 5 below the pillar tip it presses into
       }
       const sc = flatScrewModel(ins.screwLen, 2, ins.head - 0.2); sc.rotation.x = Math.PI; sc.position.set(x, y, ex ? -24 : 0); group.add(sc);
     }
