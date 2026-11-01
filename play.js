@@ -1,6 +1,7 @@
 // play.js — the Play tab: a top-down Spin Compass you can flick. Simulates the LED light show
 // (persistence of vision at speed, chase, ticker, landed pulse) and deals the prompt card.
 // mountPlay(container, getConfig) -> { refresh(), destroy() }. No DOM access at import time.
+import { stripLead } from './firmware.js';
 
 const D2R = Math.PI / 180;
 const PERSIST = 0.07;          // s an eye holds a moving LED (sets the smear length)
@@ -109,7 +110,7 @@ export function mountPlay(container, getConfig) {
   // ---------------------------------------------------------------- prompts + card
   function list(kind, label) {
     const P = cfg.prompts || {};
-    if (kind === 'value') { const L = P.value && P.value[label]; return L && L.length ? L : [`${label}: name a time it cost you something to live it.`, `${label}: who shows it best in your life, and how?`, `${label}: describe an engineering decision where it should come first.`]; }
+    if (kind === 'value') { const L = P.value && P.value[label]; return L && L.length ? L : ['Name a time living it cost you something.', 'Who in your life shows it best, and how?', 'Describe an engineering decision where it should come first.']; }
     return P[kind] && P[kind].length ? P[kind] : FALLBACK[kind];
   }
   function pick(kind, label) {
@@ -129,22 +130,22 @@ export function mountPlay(container, getConfig) {
   }
   function button(text, ghost, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'csp-btn' + (ghost ? ' ghost' : ''); b.textContent = text; b.onclick = fn; return b; }
   function showCard(seg) {
-    const { label, kind } = seg, prompt = pick(kind, label);
+    const { label, kind } = seg, name = label || KIND_NAME[kind], prompt = stripLead(name, pick(kind, label));   // the name once, then the prompt
     card.style.setProperty('--k', rgba(KIND_RGB[kind], 1));
     card.replaceChildren();
     const x = button('×', true, clearCard); x.className = 'csp-x'; x.setAttribute('aria-label', 'Close');
-    const k = document.createElement('div'); k.className = 'csp-kind'; k.textContent = kind === 'value' ? 'Your value' : KIND_NAME[kind];
+    const k = document.createElement('div'); k.className = 'csp-kind'; k.textContent = kind === 'value' ? 'Your value' : ''; k.hidden = kind !== 'value';
     const h = document.createElement('div'); h.className = 'csp-label'; h.textContent = label || KIND_NAME[kind];
     const p = document.createElement('p'); p.className = 'csp-prompt'; p.textContent = prompt;
     const acts = document.createElement('div'); acts.className = 'csp-acts';
     if (kind === 'again') acts.append(button('Spin again', false, () => spin()));
     if (kind === 'choose') for (const kk of ['truth', 'dare']) acts.append(button(KIND_NAME[kk], true, () => {
-      const q = pick(kk, KIND_NAME[kk]); k.textContent = 'Choose → ' + KIND_NAME[kk]; p.textContent = q;
+      const q = stripLead(KIND_NAME[kk], pick(kk, KIND_NAME[kk])); k.textContent = 'You chose'; k.hidden = false; h.textContent = KIND_NAME[kk]; p.textContent = q;
       card.style.setProperty('--k', rgba(KIND_RGB[kk], 1)); acts.replaceChildren(); speak(`${KIND_NAME[kk]}! ${q}`);
     }));
     card.append(x, k, h, p); if (acts.childNodes.length) card.append(acts);
     card.hidden = false;
-    speak(`${label || KIND_NAME[kind]}! ${prompt}`);
+    speak(`${name}! ${prompt}`);
   }
   function clearCard() { card.hidden = true; card.replaceChildren(); if (typeof speechSynthesis !== 'undefined') try { speechSynthesis.cancel(); } catch (_) {} }
 

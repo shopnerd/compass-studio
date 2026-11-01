@@ -4,6 +4,7 @@
 //   /clips/<segment>.wav   the segment name, played when it lands
 //   /clips/bottle.wav      spun flat on a table           /clips/hello.wav   at power-on (optional)
 //   /prompts/<list>-<n>.wav  prompt n of a list: truth, dare, again, choose, or value<segment>
+import { stripLead } from './firmware.js';   // the segment name is said once, so prompts never repeat it
 
 export const RATES = [{ hz: 16000, label: '16 kHz (clearer)' }, { hz: 11025, label: '11 kHz (twice as many clips)' }];
 export const BUDGETS = [
@@ -24,7 +25,7 @@ export function clipPlan(segments, prompts, opts = {}) {
     if (s.kind === 'value') lists.push({ clip: `value${i}`, title: s.label, items: (prompts.value && prompts.value[s.label]) || [] });
   });
   for (const k of ['truth', 'dare', 'again', 'choose']) if (segments.some(s => s.kind === k)) lists.push({ clip: k, title: k[0].toUpperCase() + k.slice(1), items: prompts[k] || [] });
-  for (const L of lists) L.items.slice(0, per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: t, group: 'prompt', label: `${L.title} ${n + 1}`, list: L.clip, n }));
+  for (const L of lists) L.items.slice(0, per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: stripLead(L.title, t), group: 'prompt', label: `${L.title} ${n + 1}`, list: L.clip, n }));
   return { clips, lists: lists.map(L => ({ ...L, voiced: Math.min(per, L.items.length) })) };
 }
 // Prompt lists cut to the voiced ones, so the board never deals a prompt it can't say.

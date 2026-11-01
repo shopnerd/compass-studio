@@ -37,27 +37,27 @@ export const DEFAULT_PROMPTS = {
     "Say the alphabet backwards from M as fast as you can.",
   ],
   again: [
-    "Spin again!",
-    "Again: the next answer counts double.",
-    "Again: the player on your left spins for you.",
-    "Again: spin with your other hand.",
-    "Again: call your segment before you spin.",
-    "Again: spin it flat on the table; whoever the arrow points at answers.",
-    "Again: the group picks who spins next.",
-    "Again: if you land on a value, everyone answers it.",
-    "Again: slow spin only. Make it stop in five seconds.",
-    "Lucky you. Spin again.",
+    "One more spin!",
+    "The next answer counts double.",
+    "The player on your left spins for you.",
+    "Spin with your other hand.",
+    "Call your segment before you spin.",
+    "Spin it flat on the table; whoever the arrow points at answers.",
+    "The group picks who spins next.",
+    "If you land on a value, everyone answers it.",
+    "Slow spin only. Make it stop in five seconds.",
+    "Lucky you. One more spin.",
   ],
   choose: [
     "Spinner's choice: Truth or Dare?",
-    "Choose Truth or Dare, but the group gets one veto.",
+    "Truth or Dare, but the group gets one veto.",
     "Pick a player and choose Truth or Dare for them.",
     "Take a Truth, or pass a Dare to the player on your right.",
-    "Choose: Truth, Dare, or answer one of your own four values.",
-    "Choose, then the group can swap it for the other one by vote.",
-    "Choose Truth or Dare, and someone else writes the question.",
-    "Choose for the person who spun last.",
-    "Choose Truth or Dare. Whoever laughs first goes next.",
+    "Truth, Dare, or answer one of your own four values.",
+    "Pick one, then the group can swap it for the other by vote.",
+    "Truth or Dare, and someone else writes the question.",
+    "You pick for the person who spun last.",
+    "Truth or Dare. Whoever laughs first goes next.",
     "Your call: Truth, Dare, or spin again.",
   ],
 };
@@ -169,14 +169,14 @@ export const FUNNY_PROMPTS = {
     "Give a safety briefing for opening a bag of chips.",
   ],
   again: [
-    "Spin again. The design changed and nobody told you.",
-    "Spin again. Version two always works better.",
-    "Spin again. Blame the tolerances.",
+    "The design changed and nobody told you. One more spin.",
+    "Version two always works better. Spin.",
+    "Blame the tolerances. Spin.",
   ],
   choose: [
-    "Choose Truth or Dare. Indecision costs extra.",
+    "Truth or Dare. Indecision costs extra.",
     "Your call: Truth, Dare, or pass the blame to the next person.",
-    "Choose wisely. This is going in the design review.",
+    "Pick wisely. This is going in the design review.",
   ],
 };
 // deck: 'classroom' (the original lists), 'engineering', 'both' (interleaved, so the first few voiced clips mix both),
@@ -190,15 +190,26 @@ export function deckPrompts(deck = 'both') {
   return { ...DEFAULT_PROMPTS, truth: mix(DEFAULT_PROMPTS.truth, E.truth), dare: mix(DEFAULT_PROMPTS.dare, E.dare) };
 }
 
+// The segment name is said (and shown) once, then the prompt. A prompt that opens with the same name ("Service: …",
+// "Again: …") loses that opening so nothing is said twice.
+export function stripLead(label, text) {
+  const L = String(label || '').trim(), t = String(text || '').trim();
+  if (!L || t.length <= L.length || t.slice(0, L.length).toLowerCase() !== L.toLowerCase()) return t;
+  let i = L.length; while (t[i] === ' ') i++;
+  if (!':!.-'.includes(t[i] || 'x')) return t;   // "Truthfully" or "Choose Truth or Dare" stay as written
+  i++; while (t[i] === ' ') i++;
+  const rest = t.slice(i);
+  return rest ? rest[0].toUpperCase() + rest.slice(1) : t;
+}
 export function valuePrompts(label) {
   const L = String(label || 'This value').trim();
   return [
-    `${L}: name a time doing the right thing cost you something.`,
-    `${L}: who in your life shows it best, and how?`,
-    `${L}: describe an engineering decision where it should come first.`,
-    `${L}: when did it clash with another of your values? Which won?`,
-    `${L}: what would you do differently tomorrow if you took it 10% more seriously?`,
-    `${L}: name a product you use every day that gets it right, or wrong.`,
+    `Name a time living it cost you something.`,
+    `Who in your life shows it best, and how?`,
+    `Describe an engineering decision where it should come first.`,
+    `When did it clash with another of your values? Which won?`,
+    `What would you do differently tomorrow if you took it 10% more seriously?`,
+    `Name a product you use every day that gets it right, or wrong.`,
   ];
 }
 
@@ -220,9 +231,10 @@ function normalize(cfg = {}) {
   ];
   const p = cfg.prompts || {};
   const prompts = {};
-  for (const k of ['truth', 'dare', 'again', 'choose']) prompts[k] = (p[k] && p[k].length ? p[k] : DEFAULT_PROMPTS[k]).map(ascii);
+  const KN = { truth: 'Truth', dare: 'Dare', again: 'Again', choose: 'Choose' };
+  for (const k of ['truth', 'dare', 'again', 'choose']) prompts[k] = (p[k] && p[k].length ? p[k] : DEFAULT_PROMPTS[k]).map(t => ascii(stripLead(KN[k], t)));
   prompts.value = {};
-  for (const s of segments) if (s.kind === 'value') prompts.value[s.label] = ((p.value && p.value[s.label] && p.value[s.label].length) ? p.value[s.label] : valuePrompts(s.label)).map(ascii);
+  for (const s of segments) if (s.kind === 'value') prompts.value[s.label] = ((p.value && p.value[s.label] && p.value[s.label].length) ? p.value[s.label] : valuePrompts(s.label)).map(t => ascii(stripLead(s.label, t)));
   return { name: ascii(cfg.name || 'Spin Compass'), segments, leds, prompts, pins: { ...DEFAULT_PINS, ...(cfg.pins || {}) }, imuClass: cfg.imuClass, imuLabel: cfg.imuLabel ? ascii(cfg.imuLabel) : '' };
 }
 const IMU_CLASS = (c) => /^Adafruit_(LSM6DSOX|ISM330DHCX|LSM6DS3TRC|LSM6DS33)$/.test(c.imuClass || '') ? c.imuClass : 'Adafruit_LSM6DSOX';
@@ -508,7 +520,7 @@ void dealPrompt(int seg) {
   if (L.count > 1 && n == lastPrompt[seg]) n = (n + 1) % L.count;   // no immediate repeats
   lastPrompt[seg] = n;
   Serial.printf("LANDED %d %s: %s\\n", seg, SEGMENTS[seg].label, L.items[n]);
-  if (PLAY_PROMPT_CLIP && SEGMENTS[seg].kind != K_AGAIN) {
+  if (PLAY_PROMPT_CLIP) {   // the name once (above), then the prompt; prompts never repeat the name
     snprintf(path, sizeof(path), "/prompts/%s-%d.wav", L.clip, n);
     playClip(path);
   }
