@@ -25,14 +25,18 @@ export function clipPlan(segments, prompts, opts = {}) {
     if (s.kind === 'value') lists.push({ clip: `value${i}`, title: s.label, items: (prompts.value && prompts.value[s.label]) || [] });
   });
   for (const k of ['truth', 'dare', 'again', 'choose']) if (segments.some(s => s.kind === k)) lists.push({ clip: k, title: k[0].toUpperCase() + k.slice(1), items: prompts[k] || [] });
-  for (const L of lists) L.items.slice(0, per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: stripLead(L.title, t), group: 'prompt', label: `${L.title} ${n + 1}`, list: L.clip, n }));
-  return { clips, lists: lists.map(L => ({ ...L, voiced: Math.min(per, L.items.length) })) };
+  // combo deck: Truth is a setup clip followed by an answer-card clip; answers are short, so voice four per setup
+  if (prompts.combo && (prompts.answer || []).length && segments.some(s => s.kind === 'truth')) lists.push({ clip: 'answer', title: 'Answer', items: prompts.answer, per: ANSWERS_PER * per });
+  for (const L of lists) L.items.slice(0, L.per ?? per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: stripLead(L.title, t), group: 'prompt', label: `${L.title} ${n + 1}`, list: L.clip, n }));
+  return { clips, lists: lists.map(L => ({ ...L, voiced: Math.min(L.per ?? per, L.items.length) })) };
 }
 // Prompt lists cut to the voiced ones, so the board never deals a prompt it can't say.
+export const ANSWERS_PER = 4;   // combo deck: answer cards voiced per voiced setup
 export function voicedPrompts(prompts, segments, per) {
   if (!isFinite(per)) return prompts;
   const out = { ...prompts, value: {} };
   for (const k of ['truth', 'dare', 'again', 'choose']) out[k] = (prompts[k] || []).slice(0, Math.max(1, per));
+  if (prompts.combo) out.answer = (prompts.answer || []).slice(0, Math.max(1, ANSWERS_PER * per));
   for (const s of segments) if (s.kind === 'value') out.value[s.label] = ((prompts.value || {})[s.label] || []).slice(0, Math.max(1, per));
   return out;
 }

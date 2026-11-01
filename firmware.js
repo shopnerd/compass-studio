@@ -113,74 +113,122 @@ export const ENGINEERING_PROMPTS = {
     "Explain how a can opener cuts without leaving a sharp edge, or admit you never noticed.",
   ],
 };
-// Funny deck: party-game style. Fill-in-the-blank confessions, would-you-rather dilemmas and silly performance dares,
-// all about engineering life. Kept clean enough for a classroom. Written for Compass Studio.
+// Funny deck: party-game style. Truth deals a fill-in card plus a random answer card (26 x 61 = 1,586 combos): the
+// player defends the combo or the group swaps the answer. Dares are performances. A roast of engineering life,
+// kept fine for class. Setups end where the answer goes; answers are short noun phrases. Written for Compass Studio.
+export const FUNNY_SETUPS = [
+  "Our capstone failed because of",
+  "In the post-mortem, we blamed",
+  "What is really holding the senior design project together?",
+  "New rule in the shop: nobody brings in",
+  "The tiny footnote on the datasheet warns about",
+  "My resume calls it leadership. It was really",
+  "The TA's only comment on my report was",
+  "The safety factor on this bridge comes entirely from",
+  "Tonight's all-nighter is powered by",
+  "Version two fixes everything, except",
+  "I did not fail the exam. I was testing",
+  "The client asked for a bridge. We delivered",
+  "Our group's communication plan is",
+  "Every engineering building smells faintly of",
+  "My professor's favorite problem-solving method is",
+  "The robot stopped working the moment it saw",
+  "Nobody warned the freshmen about",
+  "What did the lab manager find inside the 3D printer this morning?",
+  "My next startup pitch: Uber, but for",
+  "The real reason the demo crashed:",
+  "Ten years from now, my engineering legacy will be",
+  "The most dangerous tool in the shop is still",
+  "My design review went great until someone asked about",
+  "Our team's secret weapon is",
+  "Peer-reviewed research has finally confirmed",
+  "The scariest words in engineering are",
+];
+export const FUNNY_ANSWERS = [
+  "one zip tie doing the work of four bolts", "hot glue and denial", "the intern who left in June",
+  "a 3D print with 5 percent infill and big dreams", "SolidWorks crashing at 98 percent", "the one Allen key nobody ever returns",
+  "an Arduino held on with a rubber band", "a Gantt chart nobody has opened", "rounding pi to 3",
+  "the wrong units, said with total confidence", "an extension cord plugged into another extension cord", "free pizza at an info session",
+  "a group chat with 400 unread messages", "four energy drinks and a dream", "a design that only worked in simulation",
+  "a strongly worded email to the TA", "the group member who only shows up for the photo", "a spreadsheet named FINAL final v7",
+  "a bridge made entirely of popsicle sticks", "a mechanical pencil with no lead", "the stripped screw that ended my week",
+  "a soldering iron left on overnight", "the smell of burning plastic", "an angry Roomba",
+  "the factor of safety, rounded down", "a loose wire that only fails during demos", "duct tape rated for space flight",
+  "a feature added at 3 a.m. and never tested", "a drone stuck in a tree", "the vending machine that ate my last dollar",
+  "a license server that is always down", "a CAD model with no constraints whatsoever", "the printer jam heard around the world",
+  "a battery that is definitely getting warmer", "an engineer explaining a joke", "a calculator stuck in radians",
+  "measuring once and cutting twice", "a group chat named Doomed", "lecture slides from 1987",
+  "a laser cutter fire drill", "a prototype held together by optimism", "one more coat of paint",
+  "the shop vac's tragic backstory", "a breadboard with 200 jumper wires", "an AI confidently inventing a formula",
+  "the big red button nobody explains", "a bolt that is almost the right size", "turning it off and on again",
+  "a load-bearing sticky note", "an intern with a sledgehammer", "a code commit titled fixed stuff",
+  "a robot arm that only waves", "an essay about the essay", "a whiteboard nobody is allowed to erase",
+  "safety goggles worn as a headband", "requirements written on a napkin", "the last working USB-C cable on campus",
+  "a toaster with Wi-Fi", "a fidget spinner that judges you", "a meeting that could have been an email",
+  "a tape measure that only goes to 11",
+];
+// "Our capstone failed because of" + "hot glue and denial" -> "Our capstone failed because of hot glue and denial."
+export function comboText(setup, answer) {
+  const s = String(setup || '').trim(), a = String(answer || '').trim();
+  if (!a) return s;
+  if (/[?:]$/.test(s)) return `${s} ${a[0].toUpperCase()}${a.slice(1)}.`;
+  return `${s} ${a}.`;
+}
 export const FUNNY_PROMPTS = {
-  truth: [
-    "Fill in the blank: My CAD file is named final, final two, and blank.",
-    "Would you rather debug code with no comments, or build flat-pack furniture with one screw missing?",
-    "What is the most expensive thing you have broken in a lab, and who still does not know?",
-    "Fill in the blank: The print failed because of blank. Wrong answers only.",
-    "Would you rather have every part you design come out 2 millimeters too big, or every meeting run 20 minutes long?",
-    "What is the most cursed fix you have made with hot glue or zip ties? Is it still holding?",
-    "Confess: have you ever turned it off and on again, then taken credit for fixing it?",
-    "Would you rather work with a genius who never documents anything, or a sweetheart who documents everything wrong?",
-    "Fill in the blank: Nothing says I am an engineer like blank.",
-    "What is your worst unit mix-up? Inches, millimeters, or something more creative?",
-    "Which tool in the shop are you secretly a little scared of?",
-    "Would you rather use only duct tape or only zip ties for the rest of the semester?",
-    "Fill in the blank: My group project would have been on time if not for blank.",
-    "Rate your last all-nighter from one to ten. Was the result worth it?",
-    "What is your most unhinged engineering opinion? Defend it like your grade depends on it.",
-    "Would you rather explain your project to your grandmother or to a five-year-old? Do it in one sentence.",
-    "Fill in the blank: The datasheet said one thing, but reality said blank.",
-    "Who in this group would survive longest on a desert island with only a 3D printer?",
-    "What dumb question did you ask that turned out to be really smart?",
-    "Would you rather have a printer that never jams, or a laptop that never updates during a demo?",
-    "Fill in the blank: Measure twice, cut once, then blank.",
-    "What did movies completely lie to you about engineering?",
-    "Which is scarier: a design review at 9 a.m., or a robot that suddenly goes quiet?",
-    "Fill in the blank: The real safety factor on my homework is blank.",
-  ],
+  combo: true,
+  truth: FUNNY_SETUPS,
+  answer: FUNNY_ANSWERS,
   dare: [
-    "Give a dramatic TED talk about a paper clip. 30 seconds, full passion.",
+    "Give a 30-second TED talk titled: Why my last prototype was actually a success.",
     "Pitch a startup that solves a problem nobody has. The group decides if they would invest.",
-    "Act out a 3D printer failing eleven hours into a twelve-hour print.",
-    "Explain what an engineer does using only sound effects. The group guesses.",
-    "Narrate the person on your left building flat-pack furniture, like a nature documentary.",
-    "Be a stripped screw. Tell the group how you feel.",
-    "Sell the group the most useless object within reach. You have 20 seconds.",
-    "Tell a client their bridge is made of spaghetti. Stay calm and professional.",
-    "Invent a unit of measurement from something on the table, then measure the person on your right in it.",
+    "Act out a 3D printer failing eleven hours into a twelve-hour print. Sound effects required.",
+    "Be a stripped screw in therapy. Tell the group how it started.",
+    "Tell a client, calmly and professionally, that their bridge is made of spaghetti.",
+    "Narrate the person on your left like a nature documentary about a rare engineer in the wild.",
+    "Read the warning label for this spinner in your most dramatic movie-trailer voice. Make it up.",
+    "Give a eulogy for your last failed prototype. The group may weep.",
+    "Explain gravity like a burned-out TA on the last day of the semester.",
     "Do your best impression of a machine in the shop. The group guesses which one.",
-    "Write the warning label for this spinner and read it in your most serious voice.",
-    "Explain gravity like a worn-out TA on the last day of the semester.",
-    "Give a eulogy for your last failed prototype.",
-    "Rename three things nearby with overly technical names. A spoon is a handheld fluid transfer unit.",
-    "Show us your face when the code compiles on the first try. Now when it does not.",
-    "Reverse engineer the outfit of the person on your right: every material, and how it was made.",
-    "Pitch a ridiculous new feature for this spinner. The group votes yes or no.",
-    "Explain a meme to the group as if it were a peer-reviewed paper.",
+    "Rename three things on the table with absurd technical names. A spoon is a handheld fluid transfer unit.",
     "Hold a 20-second design review of someone's shoes. Constructive, but brutal.",
-    "Act out the moment your deadline gets moved up a week.",
-    "In 30 seconds, design a machine that makes toast and wakes up your roommate.",
+    "Act out the exact moment you realize the units were wrong.",
+    "Sell the group the most useless object within reach like it is next year's hottest gadget.",
     "Speak only in engineering jargon until your next turn. Slip up and you spin again.",
-    "Build the tallest tower you can from things on the table in 30 seconds.",
-    "Give a safety briefing for opening a bag of chips.",
+    "Give a safety briefing for opening a bag of chips. Cover every hazard.",
+    "Explain a meme to the group as if it were a peer-reviewed paper.",
+    "Reenact a group project meeting where you play all four group members.",
+    "Interview the person on your right for a job at a company that only makes left-handed screwdrivers.",
+    "Sketch a machine that makes toast and wakes up your roommate. 30 seconds.",
+    "Defend a terrible design decision you have actually made, like a politician at a press conference.",
+    "Announce your current project like a boxer entering the ring.",
   ],
   again: [
     "The design changed and nobody told you. One more spin.",
     "Version two always works better. Spin.",
     "Blame the tolerances. Spin.",
+    "The spec was wrong. Spin, and pretend it was the plan.",
+    "Bug, meet feature. Spin.",
+    "Spin with your eyes closed. Engineers call this testing.",
+    "Spin, and the person on your left scores it out of ten.",
+    "Spin like your deadline depends on it.",
+    "Spin while narrating it like a lab demo.",
+    "The reviewer wants another iteration. Spin.",
   ],
   choose: [
     "Truth or Dare. Indecision costs extra.",
     "Your call: Truth, Dare, or pass the blame to the next person.",
     "Pick wisely. This is going in the design review.",
+    "Truth or Dare, and the group picks your answer card.",
+    "Pick one, and the person on your right gets a veto.",
+    "Truth or Dare. Commit like it is a final design freeze.",
+    "Pick for the person who laughed loudest last round.",
+    "Truth or Dare, or explain why both are out of scope.",
+    "Pick one in five seconds. That is the whole timeline.",
+    "Truth or Dare. The group may request a redesign.",
   ],
 };
 // deck: 'classroom' (the original lists), 'engineering', 'both' (interleaved, so the first few voiced clips mix both),
-// or 'funny' (the party-game deck, with its own spin-again and choose lines)
+// or 'funny' (the party-game deck: Truth deals setup + answer combos, with its own dares, spin-again and choose lines)
 export function deckPrompts(deck = 'both') {
   if (deck === 'classroom') return DEFAULT_PROMPTS;
   if (deck === 'funny') return { ...DEFAULT_PROMPTS, ...FUNNY_PROMPTS };
@@ -210,6 +258,12 @@ export function valuePrompts(label) {
     `When did it clash with another of your values? Which won?`,
     `What would you do differently tomorrow if you took it 10% more seriously?`,
     `Name a product you use every day that gets it right, or wrong.`,
+    `When is it easy to live this one, and when is it hard?`,
+    `Who taught you this one, on purpose or by accident?`,
+    `Give a quick example of it from this week.`,
+    `What would a team that ignored it look like?`,
+    `How would someone know you care about it without you saying so?`,
+    `Is it ever wrong to follow it? When?`,
   ];
 }
 
@@ -233,6 +287,9 @@ function normalize(cfg = {}) {
   const prompts = {};
   const KN = { truth: 'Truth', dare: 'Dare', again: 'Again', choose: 'Choose' };
   for (const k of ['truth', 'dare', 'again', 'choose']) prompts[k] = (p[k] && p[k].length ? p[k] : DEFAULT_PROMPTS[k]).map(t => ascii(stripLead(KN[k], t)));
+  // combo deck: Truth deals a setup (the truth list) plus an answer card, said as two clips
+  prompts.combo = !!(p.combo && p.answer && p.answer.length && segments.some(s => s.kind === 'truth'));
+  prompts.answer = prompts.combo ? p.answer.map(t => ascii(t)) : [];
   prompts.value = {};
   for (const s of segments) if (s.kind === 'value') prompts.value[s.label] = ((p.value && p.value[s.label] && p.value[s.label].length) ? p.value[s.label] : valuePrompts(s.label)).map(t => ascii(stripLead(s.label, t)));
   return { name: ascii(cfg.name || 'Spin Compass'), segments, leds, prompts, pins: { ...DEFAULT_PINS, ...(cfg.pins || {}) }, imuClass: cfg.imuClass, imuLabel: cfg.imuLabel ? ascii(cfg.imuLabel) : '' };
@@ -307,14 +364,20 @@ ${ledRows}
 function promptsH(c) {
   const arr = (name, L) => `static const char* const ${name}[] = {\n${L.map((s) => '  ' + cstr(s) + ',').join('\n')}\n};`;
   const parts = [`// prompts.h - generated by Compass Studio. Text for Serial and for recording clips.
-// Clip for prompt n of a list: /prompts/<clip>-<n>.wav  (clip = truth, dare, again, choose, or value<segment>)
+// Clip for prompt n of a list: /prompts/<clip>-<n>.wav  (clip = truth, dare, again, choose, answer, or value<segment>)
 #pragma once`];
   parts.push(arr('P_TRUTH', c.prompts.truth), arr('P_DARE', c.prompts.dare), arr('P_AGAIN', c.prompts.again), arr('P_CHOOSE', c.prompts.choose));
+  const answers = c.prompts.combo ? c.prompts.answer : [''];
+  parts.push(`// Combo deck: on Truth, a setup from P_TRUTH then an answer card from P_ANSWER (/prompts/answer-<n>.wav).
+#define COMBO_TRUTH ${c.prompts.combo ? 1 : 0}
+#define NUM_ANSWERS ${c.prompts.combo ? answers.length : 0}`, arr('P_ANSWER', answers));
   const rows = c.segments.map((s, i) => {
     if (s.kind === 'value') { parts.push(arr(`P_VALUE${i}`, c.prompts.value[s.label])); return `  { P_VALUE${i}, ${c.prompts.value[s.label].length}, "value${i}" },`; }
     const nm = 'P_' + s.kind.toUpperCase();
     return `  { ${nm}, ${c.prompts[s.kind].length}, "${s.kind}" },`;
   });
+  const longest = Math.max(1, answers.length, ...['truth', 'dare', 'again', 'choose'].map(k => c.prompts[k].length), ...Object.values(c.prompts.value).map(L => L.length));
+  parts.push(`#define MAX_PROMPTS ${Math.min(255, longest)}`);
   parts.push(`struct PromptList { const char* const* items; uint8_t count; const char* clip; };
 static const PromptList SEG_PROMPTS[NUM_SEG] = {
 ${rows.join('\n')}
@@ -370,7 +433,11 @@ int landedSeg = -1, lastSegUnder = -1;
 bool bottleMode = false;
 uint32_t flashUntil[NUM_LEDS];
 float battV = 4.0f; uint32_t battMs = 0;
-int lastPrompt[NUM_SEG];
+// Shuffle decks: each list is dealt in a shuffled order, no repeats until every prompt has come up.
+// Deck NUM_SEG is the answer cards for the combo deck.
+uint8_t deckOrder[NUM_SEG + 1][MAX_PROMPTS];
+uint8_t deckLeft[NUM_SEG + 1];
+int deckLast[NUM_SEG + 1];
 
 static float wrap360(float a) { a = fmodf(a, 360.0f); return a < 0 ? a + 360.0f : a; }
 static float angDist(float a, float b) { float d = wrap360(a - b); return d > 180 ? 360 - d : d; }
@@ -511,14 +578,36 @@ void showIdle() {
 }
 
 // ---- landing
+// Next prompt from deck d (count prompts): reshuffle when it runs out, and never start a new round with the last one dealt.
+int deal(int d, int count) {
+  if (count <= 1) return 0;
+  if (count > MAX_PROMPTS) count = MAX_PROMPTS;
+  if (deckLeft[d] == 0) {
+    for (int i = 0; i < count; i++) deckOrder[d][i] = i;
+    for (int i = count - 1; i > 0; i--) { int j = random(i + 1); uint8_t t = deckOrder[d][i]; deckOrder[d][i] = deckOrder[d][j]; deckOrder[d][j] = t; }
+    if (deckOrder[d][count - 1] == deckLast[d]) { uint8_t t = deckOrder[d][0]; deckOrder[d][0] = deckOrder[d][count - 1]; deckOrder[d][count - 1] = t; }
+    deckLeft[d] = count;
+  }
+  int n = deckOrder[d][--deckLeft[d]];
+  deckLast[d] = n;
+  return n;
+}
+
 void dealPrompt(int seg) {
   char path[40];
   snprintf(path, sizeof(path), "/clips/%d.wav", seg);
   playClip(path);
   const PromptList& L = SEG_PROMPTS[seg];
-  int n = random(L.count);
-  if (L.count > 1 && n == lastPrompt[seg]) n = (n + 1) % L.count;   // no immediate repeats
-  lastPrompt[seg] = n;
+  int n = deal(seg, L.count);
+  if (COMBO_TRUTH && SEGMENTS[seg].kind == K_TRUTH && NUM_ANSWERS > 0) {   // setup + a random answer card
+    int a = deal(NUM_SEG, NUM_ANSWERS);
+    Serial.printf("LANDED %d %s: %s %s\\n", seg, SEGMENTS[seg].label, L.items[n], P_ANSWER[a]);
+    if (PLAY_PROMPT_CLIP) {
+      snprintf(path, sizeof(path), "/prompts/%s-%d.wav", L.clip, n); playClip(path);
+      snprintf(path, sizeof(path), "/prompts/answer-%d.wav", a); playClip(path);
+    }
+    return;
+  }
   Serial.printf("LANDED %d %s: %s\\n", seg, SEGMENTS[seg].label, L.items[n]);
   if (PLAY_PROMPT_CLIP) {   // the name once (above), then the prompt; prompts never repeat the name
     snprintf(path, sizeof(path), "/prompts/%s-%d.wav", L.clip, n);
@@ -568,7 +657,7 @@ void setup() {
   audioQ = xQueueCreate(4, sizeof(Clip));
   xTaskCreatePinnedToCore(audioTask, "audio", 6144, nullptr, 1, nullptr, 0);
 
-  for (int i = 0; i < NUM_SEG; i++) lastPrompt[i] = -1;
+  for (int i = 0; i <= NUM_SEG; i++) { deckLeft[i] = 0; deckLast[i] = -1; }
   randomSeed(esp_random());
   readBattery();
   lastMicros = micros(); lastMoveMs = millis();

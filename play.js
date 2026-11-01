@@ -1,7 +1,7 @@
 // play.js — the Play tab: a top-down Spin Compass you can flick. Simulates the LED light show
 // (persistence of vision at speed, chase, ticker, landed pulse) and deals the prompt card.
 // mountPlay(container, getConfig) -> { refresh(), destroy() }. No DOM access at import time.
-import { stripLead } from './firmware.js';
+import { stripLead, comboText } from './firmware.js';
 
 const D2R = Math.PI / 180;
 const PERSIST = 0.07;          // s an eye holds a moving LED (sets the smear length)
@@ -50,6 +50,7 @@ export function mountPlay(container, getConfig) {
 .csp-bar{position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;align-items:center;gap:12px;padding:0 16px;flex-wrap:wrap}
 .csp-hint{font-size:12.5px;color:var(--muted,#777)}
 .csp-btn{font:600 15px system-ui,sans-serif;border:0;border-radius:999px;padding:10px 26px;background:var(--accent,#9e1f27);color:var(--accent-ink,#fff);cursor:pointer}
+.csp-hint{margin:6px 0 0;font-size:13px;opacity:.75}
 .csp-btn.ghost{background:transparent;color:var(--ink,#222);border:1px solid var(--line,#bbb);padding:8px 18px;font-size:14px}
 .csp-btn:focus-visible{outline:2px solid var(--ink,#222);outline-offset:2px}
 .csp-card{position:absolute;left:16px;right:16px;bottom:68px;margin:0 auto;max-width:420px;background:var(--panel,#fff);color:var(--ink,#222);
@@ -81,7 +82,13 @@ export function mountPlay(container, getConfig) {
   let theta = 0, omega = 0, dragging = false, counted = false, landed = -1;
   let samples = [], lastA = 0, pid = null, raf = 0, lastT = 0, clock = 0, lastClick = 0;
   let flashes = [];       // per-LED flash time left (s)
+  // Shuffle decks: no repeats until a whole list has come up. Kept across setting changes and page reloads
+  // (this browser only); each deck is keyed by its list's text, so a changed list starts a fresh deck.
+  const BAG_KEY = 'compass-studio-play-decks';
   let bags = {}, lastPick = {};
+  try { const saved = JSON.parse(localStorage.getItem(BAG_KEY) || 'null'); if (saved && saved.bags) { bags = saved.bags; lastPick = saved.lastPick || {}; } } catch (_) {}
+  const saveBags = () => { try { localStorage.setItem(BAG_KEY, JSON.stringify({ bags, lastPick })); } catch (_) {} };
+  const sig = (L) => { let h = 0; for (const t of L) for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return L.length + '.' + (h >>> 0).toString(36); };
   let ac = null;
 
   function normalize(c = {}) {
@@ -111,10 +118,11 @@ export function mountPlay(container, getConfig) {
   function list(kind, label) {
     const P = cfg.prompts || {};
     if (kind === 'value') { const L = P.value && P.value[label]; return L && L.length ? L : ['Name a time living it cost you something.', 'Who in your life shows it best, and how?', 'Describe an engineering decision where it should come first.']; }
+    if (kind === 'answer') return P.answer || [];
     return P[kind] && P[kind].length ? P[kind] : FALLBACK[kind];
   }
   function pick(kind, label) {
-    const L = list(kind, label), key = kind + ':' + label + ':' + L.length;
+    const L = list(kind, label), key = kind + ':' + (kind === 'value' ? label : '') + ':' + sig(L);
     if (L.length === 1) return L[0];
     if (!bags[key] || !bags[key].length) {
       const b = L.map((_, i) => i);
@@ -122,28 +130,44 @@ export function mountPlay(container, getConfig) {
       if (b[b.length - 1] === lastPick[key]) [b[0], b[b.length - 1]] = [b[b.length - 1], b[0]];
       bags[key] = b;
     }
-    const i = bags[key].pop(); lastPick[key] = i; return L[i];
+    const i = bags[key].pop(); lastPick[key] = i; saveBags(); return L[i];
   }
   function speak(text) {
     if (!cfg.voice || typeof speechSynthesis === 'undefined') return;
     try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.02; speechSynthesis.speak(u); } catch (_) {}
   }
   function button(text, ghost, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'csp-btn' + (ghost ? ' ghost' : ''); b.textContent = text; b.onclick = fn; return b; }
+  const combo = () => !!(cfg.prompts && cfg.prompts.combo && (cfg.prompts.answer || []).length);
+  // Truth in the combo deck: a setup plus a random answer card. Returns the text and a way to swap the answer.
+  function dealTruth() {
+    const setup = stripLead('Truth', pick('truth', 'Truth'));
+    if (!combo()) return { text: setup };
+    let answer = pick('answer', '');
+    return { text: comboText(setup, answer), swap: () => { answer = pick('answer', ''); return comboText(setup, answer); } };
+  }
+  function swapButton(deal, p) {
+    return button('Swap the answer', true, () => { const t = deal.swap(); p.textContent = t; speak(t); });
+  }
   function showCard(seg) {
-    const { label, kind } = seg, name = label || KIND_NAME[kind], prompt = stripLead(name, pick(kind, label));   // the name once, then the prompt
+    const { label, kind } = seg, name = label || KIND_NAME[kind];
+    const deal = kind === 'truth' ? dealTruth() : null;
+    const prompt = deal ? deal.text : stripLead(name, pick(kind, label));   // the name once, then the prompt
     card.style.setProperty('--k', rgba(KIND_RGB[kind], 1));
     card.replaceChildren();
     const x = button('×', true, clearCard); x.className = 'csp-x'; x.setAttribute('aria-label', 'Close');
     const k = document.createElement('div'); k.className = 'csp-kind'; k.textContent = kind === 'value' ? 'Your value' : ''; k.hidden = kind !== 'value';
     const h = document.createElement('div'); h.className = 'csp-label'; h.textContent = label || KIND_NAME[kind];
     const p = document.createElement('p'); p.className = 'csp-prompt'; p.textContent = prompt;
+    let hintEl = null;
     const acts = document.createElement('div'); acts.className = 'csp-acts';
     if (kind === 'again') acts.append(button('Spin again', false, () => spin()));
+    if (deal && deal.swap) { const hint = document.createElement('p'); hint.className = 'csp-hint'; hint.textContent = 'Defend it, or the group swaps the answer.'; hintEl = hint; acts.append(swapButton(deal, p)); }
     if (kind === 'choose') for (const kk of ['truth', 'dare']) acts.append(button(KIND_NAME[kk], true, () => {
-      const q = stripLead(KIND_NAME[kk], pick(kk, KIND_NAME[kk])); k.textContent = 'You chose'; k.hidden = false; h.textContent = KIND_NAME[kk]; p.textContent = q;
-      card.style.setProperty('--k', rgba(KIND_RGB[kk], 1)); acts.replaceChildren(); speak(`${KIND_NAME[kk]}! ${q}`);
+      const d = kk === 'truth' ? dealTruth() : { text: stripLead(KIND_NAME[kk], pick(kk, KIND_NAME[kk])) };
+      k.textContent = 'You chose'; k.hidden = false; h.textContent = KIND_NAME[kk]; p.textContent = d.text;
+      card.style.setProperty('--k', rgba(KIND_RGB[kk], 1)); acts.replaceChildren(); if (d.swap) acts.append(swapButton(d, p)); speak(`${KIND_NAME[kk]}! ${d.text}`);
     }));
-    card.append(x, k, h, p); if (acts.childNodes.length) card.append(acts);
+    card.append(x, k, h, p); if (hintEl) card.append(hintEl); if (acts.childNodes.length) card.append(acts);
     card.hidden = false;
     speak(`${name}! ${prompt}`);
   }
@@ -388,7 +412,7 @@ export function mountPlay(container, getConfig) {
   cfg = normalize(getConfig && getConfig()); readColors(); resize();
 
   return {
-    refresh() { cfg = normalize(getConfig && getConfig()); bags = {}; if (landed >= n()) landed = -1; readColors(); draw(); kick(); },
+    refresh() { cfg = normalize(getConfig && getConfig()); if (landed >= n()) landed = -1; readColors(); draw(); kick(); },   // decks are kept (see BAG_KEY)
     destroy() {
       if (raf) cancelAnimationFrame(raf); raf = 0; ro.disconnect();
       window.removeEventListener('keydown', onKey); dark.removeEventListener?.('change', onScheme);
