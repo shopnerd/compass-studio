@@ -4,7 +4,7 @@
 //   /clips/<segment>.wav   the segment name, played when it lands
 //   /clips/bottle.wav      spun flat on a table           /clips/hello.wav   at power-on (optional)
 //   /prompts/<list>-<n>.wav  prompt n of a list: truth, dare, again, choose, or value<segment>
-import { stripLead } from './firmware.js';   // the segment name is said once, so prompts never repeat it
+import { stripLead, valueShare } from './firmware.js';   // the segment name is said once, so prompts never repeat it
 
 export const RATES = [{ hz: 16000, label: '16 kHz (clearer)' }, { hz: 11025, label: '11 kHz (twice as many clips)' }];
 export const BUDGETS = [
@@ -21,13 +21,17 @@ export function clipPlan(segments, prompts, opts = {}) {
   clips.push({ path: '/clips/bottle.wav', text: opts.bottle || 'You! Your turn.', group: 'extra', label: 'Spin the bottle' });
   segments.forEach((s, i) => clips.push({ path: `/clips/${i}.wav`, text: s.kind === 'value' ? `${s.label}!` : `${s.label}!`, group: 'name', label: `Segment ${i + 1}: ${s.label}` }));
   const lists = [];
+  const share = valueShare(segments, prompts.value);   // values with the same questions share one set of clips
   segments.forEach((s, i) => {
-    if (s.kind === 'value') lists.push({ clip: `value${i}`, title: s.label, items: (prompts.value && prompts.value[s.label]) || [] });
+    if (s.kind === 'value' && share[i] === i) {
+      const names = segments.filter((t, k) => share[k] === i).map(t => t.label);
+      lists.push({ clip: `value${i}`, title: s.label, label: names.length > 1 ? 'Value questions' : s.label, items: (prompts.value && prompts.value[s.label]) || [] });
+    }
   });
   for (const k of ['truth', 'dare', 'again', 'choose']) if (segments.some(s => s.kind === k)) lists.push({ clip: k, title: k[0].toUpperCase() + k.slice(1), items: prompts[k] || [] });
   // combo deck: Truth is a setup clip followed by an answer-card clip; answers are short, so voice four per setup
   if (prompts.combo && (prompts.answer || []).length && segments.some(s => s.kind === 'truth')) lists.push({ clip: 'answer', title: 'Answer', items: prompts.answer, per: ANSWERS_PER * per });
-  for (const L of lists) L.items.slice(0, L.per ?? per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: stripLead(L.title, t), group: 'prompt', label: `${L.title} ${n + 1}`, list: L.clip, n }));
+  for (const L of lists) L.items.slice(0, L.per ?? per).forEach((t, n) => clips.push({ path: `/prompts/${L.clip}-${n}.wav`, text: stripLead(L.title, t), group: 'prompt', label: `${L.label || L.title} ${n + 1}`, list: L.clip, n }));
   return { clips, lists: lists.map(L => ({ ...L, voiced: Math.min(L.per ?? per, L.items.length) })) };
 }
 // Prompt lists cut to the voiced ones, so the board never deals a prompt it can't say.

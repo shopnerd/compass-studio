@@ -122,7 +122,7 @@ export function mountPlay(container, getConfig) {
     return P[kind] && P[kind].length ? P[kind] : FALLBACK[kind];
   }
   function pick(kind, label) {
-    const L = list(kind, label), key = kind + ':' + (kind === 'value' ? label : '') + ':' + sig(L);
+    const L = list(kind, label), key = kind + ':' + sig(L);   // values with the same questions share a deck
     if (L.length === 1) return L[0];
     if (!bags[key] || !bags[key].length) {
       const b = L.map((_, i) => i);
