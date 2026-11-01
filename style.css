@@ -60,6 +60,7 @@ textarea { font: 12.5px/1.5 var(--mono); resize: vertical; }
 .hint { font-size: 12px; color: var(--muted); margin: 6px 0; }
 .exports { display: grid; gap: 8px; padding-top: 16px; }
 .btn { font: 500 14px var(--sans); padding: 9px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--field); color: var(--ink); cursor: pointer; text-align: left; }
+a.btn { display: block; text-decoration: none; }
 .btn:hover { border-color: var(--muted); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn:disabled { opacity: .5; cursor: progress; }

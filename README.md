@@ -61,7 +61,7 @@ A handheld fidget-spinner version that is also a game: spin the bottle + truth o
 
 ## Files
 
-`core.js` geometry, packing, 3MF/STL/zip writers (runs in Node too) · `worker.js` Manifold + font off the main thread · `app.js` UI + three.js viewer · `data/design2025.js` rose and SC logo outlines taken from the original `Name_Example.3mf` · `data/seal.js` the 2024 seal · `data/valuecore.js` ValueCore's values with their printed sizes · `valuepicker.js` the value search and the `?values=` link · `fonts/` Nunito ExtraBold (OFL; the original used Arial Rounded MT Bold, which cannot be shipped) · `test/core-test.mjs`.
+`core.js` geometry, packing, 3MF/STL/zip writers (runs in Node too) · `worker.js` Manifold + font off the main thread · `app.js` UI + three.js viewer · `data/design2025.js` rose and SC logo outlines taken from the original `Name_Example.3mf` · `data/seal.js` the 2024 seal · `data/valuecore.js` ValueCore's values with their printed sizes · `valuepicker.js` the value search and the `?values=` link · `build.html` Spin Compass wiring diagram, pin table, tray and lid maps, build order (default Ø86 / 12-LED layout) · `fonts/` Nunito ExtraBold (OFL; the original used Arial Rounded MT Bold, which cannot be shipped) · `test/core-test.mjs`.
 
 ## Checked (2026-10-26)
 
