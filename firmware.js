@@ -113,9 +113,77 @@ export const ENGINEERING_PROMPTS = {
     "Explain how a can opener cuts without leaving a sharp edge, or admit you never noticed.",
   ],
 };
-// deck: 'classroom' (the original lists), 'engineering', or 'both' (interleaved, so the first few voiced clips mix both)
+// Funny deck: party-game style. Fill-in-the-blank confessions, would-you-rather dilemmas and silly performance dares,
+// all about engineering life. Kept clean enough for a classroom. Written for Compass Studio.
+export const FUNNY_PROMPTS = {
+  truth: [
+    "Fill in the blank: My CAD file is named final, final two, and blank.",
+    "Would you rather debug code with no comments, or build flat-pack furniture with one screw missing?",
+    "What is the most expensive thing you have broken in a lab, and who still does not know?",
+    "Fill in the blank: The print failed because of blank. Wrong answers only.",
+    "Would you rather have every part you design come out 2 millimeters too big, or every meeting run 20 minutes long?",
+    "What is the most cursed fix you have made with hot glue or zip ties? Is it still holding?",
+    "Confess: have you ever turned it off and on again, then taken credit for fixing it?",
+    "Would you rather work with a genius who never documents anything, or a sweetheart who documents everything wrong?",
+    "Fill in the blank: Nothing says I am an engineer like blank.",
+    "What is your worst unit mix-up? Inches, millimeters, or something more creative?",
+    "Which tool in the shop are you secretly a little scared of?",
+    "Would you rather use only duct tape or only zip ties for the rest of the semester?",
+    "Fill in the blank: My group project would have been on time if not for blank.",
+    "Rate your last all-nighter from one to ten. Was the result worth it?",
+    "What is your most unhinged engineering opinion? Defend it like your grade depends on it.",
+    "Would you rather explain your project to your grandmother or to a five-year-old? Do it in one sentence.",
+    "Fill in the blank: The datasheet said one thing, but reality said blank.",
+    "Who in this group would survive longest on a desert island with only a 3D printer?",
+    "What dumb question did you ask that turned out to be really smart?",
+    "Would you rather have a printer that never jams, or a laptop that never updates during a demo?",
+    "Fill in the blank: Measure twice, cut once, then blank.",
+    "What did movies completely lie to you about engineering?",
+    "Which is scarier: a design review at 9 a.m., or a robot that suddenly goes quiet?",
+    "Fill in the blank: The real safety factor on my homework is blank.",
+  ],
+  dare: [
+    "Give a dramatic TED talk about a paper clip. 30 seconds, full passion.",
+    "Pitch a startup that solves a problem nobody has. The group decides if they would invest.",
+    "Act out a 3D printer failing eleven hours into a twelve-hour print.",
+    "Explain what an engineer does using only sound effects. The group guesses.",
+    "Narrate the person on your left building flat-pack furniture, like a nature documentary.",
+    "Be a stripped screw. Tell the group how you feel.",
+    "Sell the group the most useless object within reach. You have 20 seconds.",
+    "Tell a client their bridge is made of spaghetti. Stay calm and professional.",
+    "Invent a unit of measurement from something on the table, then measure the person on your right in it.",
+    "Do your best impression of a machine in the shop. The group guesses which one.",
+    "Write the warning label for this spinner and read it in your most serious voice.",
+    "Explain gravity like a worn-out TA on the last day of the semester.",
+    "Give a eulogy for your last failed prototype.",
+    "Rename three things nearby with overly technical names. A spoon is a handheld fluid transfer unit.",
+    "Show us your face when the code compiles on the first try. Now when it does not.",
+    "Reverse engineer the outfit of the person on your right: every material, and how it was made.",
+    "Pitch a ridiculous new feature for this spinner. The group votes yes or no.",
+    "Explain a meme to the group as if it were a peer-reviewed paper.",
+    "Hold a 20-second design review of someone's shoes. Constructive, but brutal.",
+    "Act out the moment your deadline gets moved up a week.",
+    "In 30 seconds, design a machine that makes toast and wakes up your roommate.",
+    "Speak only in engineering jargon until your next turn. Slip up and you spin again.",
+    "Build the tallest tower you can from things on the table in 30 seconds.",
+    "Give a safety briefing for opening a bag of chips.",
+  ],
+  again: [
+    "Spin again. The design changed and nobody told you.",
+    "Spin again. Version two always works better.",
+    "Spin again. Blame the tolerances.",
+  ],
+  choose: [
+    "Choose Truth or Dare. Indecision costs extra.",
+    "Your call: Truth, Dare, or pass the blame to the next person.",
+    "Choose wisely. This is going in the design review.",
+  ],
+};
+// deck: 'classroom' (the original lists), 'engineering', 'both' (interleaved, so the first few voiced clips mix both),
+// or 'funny' (the party-game deck, with its own spin-again and choose lines)
 export function deckPrompts(deck = 'both') {
   if (deck === 'classroom') return DEFAULT_PROMPTS;
+  if (deck === 'funny') return { ...DEFAULT_PROMPTS, ...FUNNY_PROMPTS };
   const mix = (a, b) => { const o = []; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (b[i]) o.push(b[i]); if (a[i]) o.push(a[i]); } return o; };
   const E = ENGINEERING_PROMPTS;
   if (deck === 'engineering') return { ...DEFAULT_PROMPTS, truth: E.truth, dare: E.dare };
